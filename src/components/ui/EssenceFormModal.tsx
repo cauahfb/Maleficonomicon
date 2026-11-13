@@ -114,12 +114,7 @@ export default function EssenceFormModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
-      }}
-    >
+    <div className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
       <div
         role="dialog"
         aria-modal="true"

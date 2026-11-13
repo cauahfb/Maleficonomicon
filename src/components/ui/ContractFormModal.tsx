@@ -146,14 +146,7 @@ export default function ContractFormModal({
     'mb-2 block text-xs font-medium uppercase tracking-wider text-zinc-500'
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose()
-        }
-      }}
-    >
+    <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
       <div className="my-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
         {/* CABEÇALHO */}
 

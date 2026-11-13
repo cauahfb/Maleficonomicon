@@ -143,15 +143,9 @@ export default function SubjugationFormModal({
   const missingLink = isSubjugated && !formData.externalUrl?.trim()
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-      onClick={() => {
-        if (!saving) onClose()
-      }}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
       <div
         className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[#151515] shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
       >
         {/* Cabeçalho */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#151515] px-6 py-5">

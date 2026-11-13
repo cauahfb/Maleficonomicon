@@ -232,7 +232,7 @@ export default function Dashboard() {
         .select('id, action, entity_type, entity_name, description, created_at')
         .neq('action', 'Editado')
         .order('created_at', { ascending: false })
-        .limit(3)
+        .limit(2)
 
       if (!mounted) return
 

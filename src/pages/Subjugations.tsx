@@ -460,9 +460,9 @@ export default function Subjugations() {
     'Não descoberta',
   ]
 
-  // ==========================================================
+  // ============================================================
   // INTERFACE
-  // ==========================================================
+  // ============================================================
 
   return (
     <div className="space-y-8">
@@ -578,10 +578,11 @@ export default function Subjugations() {
                 key={status}
                 onClick={() => setFilterStatus(status)}
                 disabled={loading || !!loadError}
-                className={`rounded-lg px-4 py-2 text-sm transition ${filterStatus === status
+                className={`rounded-lg px-4 py-2 text-sm transition ${
+                  filterStatus === status
                     ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40'
                     : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                  } disabled:opacity-50`}
+                } disabled:opacity-50`}
               >
                 {status}
               </button>
@@ -598,10 +599,11 @@ export default function Subjugations() {
                   setFilterStatus(status)
                   setShowMobileFilters(false)
                 }}
-                className={`rounded-lg px-3 py-2 text-sm transition ${filterStatus === status
+                className={`rounded-lg px-3 py-2 text-sm transition ${
+                  filterStatus === status
                     ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40'
                     : 'bg-white/5 text-gray-400'
-                  }`}
+                }`}
               >
                 {status}
               </button>
@@ -652,8 +654,9 @@ export default function Subjugations() {
                         <img
                           src={creature.imageUrl}
                           alt={creature.name}
-                          className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${isDiscovered ? 'grayscale brightness-75' : ''
-                            }`}
+                          className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${
+                            isDiscovered ? 'grayscale brightness-75' : ''
+                          }`}
                           onError={(event) => {
                             event.currentTarget.style.display = 'none'
                           }}
@@ -687,10 +690,11 @@ export default function Subjugations() {
                       {isSubjugated && (
                         <div className="absolute right-3 top-3">
                           <span
-                            className={`flex h-8 w-8 items-center justify-center rounded-full ${creature.isAlive
+                            className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                              creature.isAlive
                                 ? 'bg-green-950/80 text-green-400'
                                 : 'bg-red-950/80 text-red-400'
-                              }`}
+                            }`}
                           >
                             {creature.isAlive ? (
                               <Heart className="h-4 w-4" />
@@ -728,10 +732,11 @@ export default function Subjugations() {
 
                         {isSubjugated && (
                           <span
-                            className={`text-xs ${creature.isAlive
+                            className={`text-xs ${
+                              creature.isAlive
                                 ? 'text-green-400'
                                 : 'text-red-400'
-                              }`}
+                            }`}
                           >
                             {creature.isAlive ? 'Vivo' : 'Morto'}
                           </span>
@@ -739,7 +744,6 @@ export default function Subjugations() {
                       </div>
                     </div>
                   </button>
-
 
                   {/* Ações da criatura */}
                   {(isAdmin || isDiscovered || isSubjugated) && (
@@ -778,7 +782,6 @@ export default function Subjugations() {
                       )}
                     </div>
                   )}
-
                 </div>
               )
             })}
@@ -797,10 +800,7 @@ export default function Subjugations() {
 
       {/* Detalhes da criatura: disponível após descoberta ou subjugação */}
       {viewingCreature && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          onClick={closeModal}
-        >
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div
             role="dialog"
             aria-modal="true"
@@ -852,10 +852,11 @@ export default function Subjugations() {
                 </p>
 
                 <p
-                  className={`text-lg font-semibold ${viewingCreature.discoveryStatus === 'Subjugada'
+                  className={`text-lg font-semibold ${
+                    viewingCreature.discoveryStatus === 'Subjugada'
                       ? 'text-green-400'
                       : 'text-purple-300'
-                    }`}
+                  }`}
                 >
                   {viewingCreature.discoveryStatus}
                 </p>
@@ -889,10 +890,7 @@ export default function Subjugations() {
 
       {/* Modais de interação */}
       {modalType && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-          onClick={closeModal}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div
             className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151515] p-7 text-center shadow-2xl"
             onClick={(event) => event.stopPropagation()}
