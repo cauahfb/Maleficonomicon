@@ -15,6 +15,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Eye,
 } from 'lucide-react'
 
 import type {
@@ -75,6 +76,8 @@ export default function Subjugations() {
     useState<FilterStatus>('Todas')
 
   const [modalType, setModalType] = useState<ModalType>(null)
+  const [viewingCreature, setViewingCreature] =
+    useState<Subjugation | null>(null)
 
   const [showMobileFilters, setShowMobileFilters] = useState(false)
 
@@ -131,6 +134,7 @@ export default function Subjugations() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape' && !saving) {
         setModalType(null)
+        setViewingCreature(null)
       }
     }
 
@@ -204,7 +208,7 @@ export default function Subjugations() {
   }
 
   function openEditForm(creature: Subjugation) {
-    if (!isAdmin || saving || loading || loadError) return
+    if (!isAdmin || saving) return
 
     setOperationError('')
     setEditingCreature(creature)
@@ -223,7 +227,7 @@ export default function Subjugations() {
   // ==========================================================
 
   async function handleSave(data: SubjugationFormData): Promise<void> {
-    if (!isAdmin || saving || loading || loadError) return
+    if (!isAdmin || saving) return
 
     setSaving(true)
     setOperationError('')
@@ -361,8 +365,6 @@ export default function Subjugations() {
         'Não foi possível salvar a criatura no Supabase.',
       )
 
-      // Permite que o formulário apresente o erro
-      // sem fechar ou perder os dados digitados.
       throw error
     } finally {
       setSaving(false)
@@ -374,7 +376,7 @@ export default function Subjugations() {
   // ==========================================================
 
   async function handleDelete(creature: Subjugation) {
-    if (!isAdmin || saving || loading || loadError) return
+    if (!isAdmin || saving || loading) return
 
     const confirmed = window.confirm(
       `Tem certeza de que deseja excluir "${creature.name}"?\n\nEssa ação não poderá ser desfeita.`,
@@ -386,10 +388,8 @@ export default function Subjugations() {
     setOperationError('')
 
     try {
-      // Exclui do Supabase.
       await deleteSubjugation(creature.id)
 
-      // Registra a exclusão no histórico administrativo.
       await recordAudit({
         action: 'Excluído',
         entityType: 'Subjugação',
@@ -399,7 +399,6 @@ export default function Subjugations() {
         oldData: creature,
       })
 
-      // Atualiza a interface após a exclusão.
       setSubjugations((previous) =>
         previous.filter((item) => item.id !== creature.id),
       )
@@ -442,8 +441,16 @@ export default function Subjugations() {
     }
   }
 
+  // Abre os detalhes somente se a criatura já foi descoberta.
+  function openCreatureDetails(creature: Subjugation) {
+    if (creature.discoveryStatus === 'Não descoberta') return
+
+    setViewingCreature(creature)
+  }
+
   function closeModal() {
     setModalType(null)
+    setViewingCreature(null)
   }
 
   const statusOptions: FilterStatus[] = [
@@ -486,7 +493,7 @@ export default function Subjugations() {
             className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
-            Nova Criatura
+            Nova criatura
           </button>
         )}
       </div>
@@ -571,11 +578,10 @@ export default function Subjugations() {
                 key={status}
                 onClick={() => setFilterStatus(status)}
                 disabled={loading || !!loadError}
-                className={`rounded-lg px-4 py-2 text-sm transition ${
-                  filterStatus === status
+                className={`rounded-lg px-4 py-2 text-sm transition ${filterStatus === status
                     ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40'
                     : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                } disabled:opacity-50`}
+                  } disabled:opacity-50`}
               >
                 {status}
               </button>
@@ -592,11 +598,10 @@ export default function Subjugations() {
                   setFilterStatus(status)
                   setShowMobileFilters(false)
                 }}
-                className={`rounded-lg px-3 py-2 text-sm transition ${
-                  filterStatus === status
+                className={`rounded-lg px-3 py-2 text-sm transition ${filterStatus === status
                     ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40'
                     : 'bg-white/5 text-gray-400'
-                }`}
+                  }`}
               >
                 {status}
               </button>
@@ -647,9 +652,8 @@ export default function Subjugations() {
                         <img
                           src={creature.imageUrl}
                           alt={creature.name}
-                          className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${
-                            isDiscovered ? 'grayscale brightness-75' : ''
-                          }`}
+                          className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${isDiscovered ? 'grayscale brightness-75' : ''
+                            }`}
                           onError={(event) => {
                             event.currentTarget.style.display = 'none'
                           }}
@@ -683,11 +687,10 @@ export default function Subjugations() {
                       {isSubjugated && (
                         <div className="absolute right-3 top-3">
                           <span
-                            className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                              creature.isAlive
+                            className={`flex h-8 w-8 items-center justify-center rounded-full ${creature.isAlive
                                 ? 'bg-green-950/80 text-green-400'
                                 : 'bg-red-950/80 text-red-400'
-                            }`}
+                              }`}
                           >
                             {creature.isAlive ? (
                               <Heart className="h-4 w-4" />
@@ -725,11 +728,10 @@ export default function Subjugations() {
 
                         {isSubjugated && (
                           <span
-                            className={`text-xs ${
-                              creature.isAlive
+                            className={`text-xs ${creature.isAlive
                                 ? 'text-green-400'
                                 : 'text-red-400'
-                            }`}
+                              }`}
                           >
                             {creature.isAlive ? 'Vivo' : 'Morto'}
                           </span>
@@ -738,28 +740,45 @@ export default function Subjugations() {
                     </div>
                   </button>
 
-                  {/* Controles administrativos */}
-                  {isAdmin && (
-                    <div className="flex items-center justify-end gap-2 border-t border-white/10 px-3 py-2">
-                      <button
-                        onClick={() => openEditForm(creature)}
-                        disabled={saving}
-                        title="Editar criatura"
-                        className="rounded-md p-2 text-gray-400 transition hover:bg-purple-500/10 hover:text-purple-300 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
 
-                      <button
-                        onClick={() => void handleDelete(creature)}
-                        disabled={saving}
-                        title="Excluir criatura"
-                        className="rounded-md p-2 text-gray-400 transition hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                  {/* Ações da criatura */}
+                  {(isAdmin || isDiscovered || isSubjugated) && (
+                    <div className="flex items-center justify-end gap-2 border-t border-white/10 px-3 py-2">
+                      {(isDiscovered || isSubjugated) && (
+                        <button
+                          onClick={() => openCreatureDetails(creature)}
+                          title="Ver detalhes da criatura"
+                          aria-label={`Ver detalhes de ${creature.name}`}
+                          className="rounded-md p-2 text-gray-400 transition hover:bg-blue-500/10 hover:text-blue-300"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      )}
+
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={() => openEditForm(creature)}
+                            disabled={saving}
+                            title="Editar criatura"
+                            className="rounded-md p-2 text-gray-400 transition hover:bg-purple-500/10 hover:text-purple-300 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+
+                          <button
+                            onClick={() => void handleDelete(creature)}
+                            disabled={saving}
+                            title="Excluir criatura"
+                            className="rounded-md p-2 text-gray-400 transition hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
+
                 </div>
               )
             })}
@@ -774,6 +793,98 @@ export default function Subjugations() {
           onSave={handleSave}
           onClose={closeForm}
         />
+      )}
+
+      {/* Detalhes da criatura: disponível após descoberta ou subjugação */}
+      {viewingCreature && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={closeModal}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="creature-details-title"
+            className="relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-white/10 bg-[#151515] p-6 shadow-2xl sm:p-8"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              onClick={closeModal}
+              className="absolute right-4 top-4 rounded-lg p-2 text-gray-500 transition hover:bg-white/5 hover:text-white"
+              aria-label="Fechar detalhes"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="mb-6 flex items-center gap-3 pr-10">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-500/10">
+                <Skull className="h-6 w-6 text-purple-400" />
+              </div>
+
+              <div>
+                <p className="text-xs font-medium uppercase tracking-widest text-purple-300">
+                  Registro de criatura
+                </p>
+
+                <h2
+                  id="creature-details-title"
+                  className="text-xl font-bold text-white"
+                >
+                  {viewingCreature.name}
+                </h2>
+              </div>
+            </div>
+
+            <div className="mb-6 grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+                <p className="mb-1 text-xs text-gray-500">
+                  Challenge Rating (CR)
+                </p>
+
+                <p className="text-lg font-semibold text-white">
+                  {viewingCreature.challengeRating || 'Não informado'}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+                <p className="mb-1 text-xs text-gray-500">
+                  Estado
+                </p>
+
+                <p
+                  className={`text-lg font-semibold ${viewingCreature.discoveryStatus === 'Subjugada'
+                      ? 'text-green-400'
+                      : 'text-purple-300'
+                    }`}
+                >
+                  {viewingCreature.discoveryStatus}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300">
+                Descrição
+              </h3>
+
+              <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-300">
+                  {viewingCreature.description?.trim() ||
+                    'Nenhuma descrição cadastrada para esta criatura.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-7 flex justify-end">
+              <button
+                onClick={closeModal}
+                className="rounded-lg border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-gray-300 transition hover:bg-white/10 hover:text-white"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modais de interação */}
