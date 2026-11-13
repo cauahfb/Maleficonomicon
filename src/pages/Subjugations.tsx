@@ -1,11 +1,820 @@
 
-import ModulePlaceholder from '../components/ui/ModulePlaceholder'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Search,
+  Skull,
+  LockKeyhole,
+  Unlock,
+  Heart,
+  HeartCrack,
+  X,
+  Shield,
+  Filter,
+  ExternalLink,
+  Plus,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
+
+import type {
+  Subjugation,
+  SubjugationFormData,
+  CreatureDiscoveryStatus,
+} from '../types/subjugation'
+
+import {
+  getSubjugations,
+  saveSubjugations,
+} from '../lib/subjugationStorage'
+
+import SubjugationFormModal from '../components/ui/SubjugationFormModal'
+import { addAuditLog } from '../lib/auditLogStorage'
+import type { AuditLogFormData } from '../types/auditLog'
+
+type FilterStatus = 'Todas' | CreatureDiscoveryStatus
+
+type ModalType = 'locked' | 'unknown' | 'missing-link' | null
+
+// ============================================================
+// DADOS INICIAIS DE DEMONSTRAÇÃO
+// ============================================================
+
+const demoSubjugations: Subjugation[] = [
+  {
+    id: 'demo-vrock',
+    name: 'Vrock',
+    challengeRating: '6',
+    description:
+      'Uma criatura demoníaca semelhante a um abutre humanoide. Violenta e cruel, é conhecida por espalhar doenças e devastação.',
+    discoveryStatus: 'Subjugada',
+    isAlive: true,
+    externalUrl: '',
+    subjugatedDate: '12/11/2026',
+    dhaliaLevel: 10,
+    createdAt: 1,
+  },
+  {
+    id: 'demo-barlgura',
+    name: 'Barlgura',
+    challengeRating: '5',
+    description:
+      'Um demônio poderoso, semelhante a um grande símio, conhecido por sua força brutal e capacidade de emboscada.',
+    discoveryStatus: 'Descoberta',
+    isAlive: true,
+    createdAt: 2,
+  },
+  {
+    id: 'demo-hezrou',
+    name: 'Hezrou',
+    challengeRating: '8',
+    description:
+      'Um demônio repugnante, cuja presença é acompanhada por um odor nauseante e uma aura de corrupção.',
+    discoveryStatus: 'Descoberta',
+    isAlive: true,
+    createdAt: 3,
+  },
+  {
+    id: 'demo-shadow-demon',
+    name: 'Shadow Demon',
+    challengeRating: '4',
+    description:
+      'Uma entidade demoníaca formada por sombras, capaz de se esconder na escuridão e atacar suas vítimas.',
+    discoveryStatus: 'Não descoberta',
+    isAlive: true,
+    createdAt: 4,
+  },
+]
+
+// ============================================================
+// HISTÓRICO ADMINISTRATIVO
+// ============================================================
+
+function recordAudit(data: AuditLogFormData) {
+  try {
+    addAuditLog(data)
+  } catch (error) {
+    console.error(
+      'Não foi possível registrar a atividade administrativa:',
+      error,
+    )
+  }
+}
+
+// ============================================================
+// MIGRAÇÃO DE DADOS ANTIGOS
+// ============================================================
+
+function migrateOldSubjugations(data: unknown[]): Subjugation[] {
+  return data.map((item) => {
+    const creature = item as Record<string, unknown>
+
+    if (!('discoveryStatus' in creature)) {
+      return {
+        ...creature,
+        discoveryStatus:
+          creature.isSubjugated === true
+            ? 'Subjugada'
+            : 'Descoberta',
+        isAlive:
+          typeof creature.isAlive === 'boolean'
+            ? creature.isAlive
+            : true,
+      } as Subjugation
+    }
+
+    return {
+      ...creature,
+      isAlive:
+        typeof creature.isAlive === 'boolean'
+          ? creature.isAlive
+          : true,
+    } as Subjugation
+  })
+}
+
+// ============================================================
+// COMPONENTE PRINCIPAL
+// ============================================================
 
 export default function Subjugations() {
+  const [subjugations, setSubjugations] = useState<Subjugation[]>(() => {
+    const savedData = getSubjugations()
+
+    return savedData === null
+      ? demoSubjugations
+      : migrateOldSubjugations(savedData)
+  })
+
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterStatus, setFilterStatus] =
+    useState<FilterStatus>('Todas')
+
+  const [modalType, setModalType] = useState<ModalType>(null)
+
+  const [showMobileFilters, setShowMobileFilters] = useState(false)
+
+  const [showForm, setShowForm] = useState(false)
+  const [editingCreature, setEditingCreature] =
+    useState<Subjugation | undefined>(undefined)
+
+  // ==========================================================
+  // PERSISTÊNCIA
+  // ==========================================================
+
+  useEffect(() => {
+    saveSubjugations(subjugations)
+  }, [subjugations])
+
+  // ==========================================================
+  // FECHAR MODAL COM ESC
+  // ==========================================================
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setModalType(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  // ==========================================================
+  // CONTADORES
+  // ==========================================================
+
+  const totalSubjugated = subjugations.filter(
+    (creature) => creature.discoveryStatus === 'Subjugada',
+  ).length
+
+  const totalDiscovered = subjugations.filter(
+    (creature) => creature.discoveryStatus !== 'Não descoberta',
+  ).length
+
+  const totalDead = subjugations.filter(
+    (creature) =>
+      creature.discoveryStatus === 'Subjugada' &&
+      !creature.isAlive,
+  ).length
+
+  // ==========================================================
+  // PESQUISA E FILTROS
+  // ==========================================================
+
+  const filteredSubjugations = useMemo(() => {
+    const search = searchTerm.toLowerCase().trim()
+
+    return subjugations
+      .filter((creature) => {
+        if (
+          filterStatus !== 'Todas' &&
+          creature.discoveryStatus !== filterStatus
+        ) {
+          return false
+        }
+
+        // Durante uma pesquisa, criaturas desconhecidas ficam ocultas.
+        if (search && creature.discoveryStatus === 'Não descoberta') {
+          return false
+        }
+
+        if (!search) return true
+
+        return (
+          creature.name.toLowerCase().includes(search) ||
+          creature.challengeRating.toLowerCase().includes(search) ||
+          creature.description.toLowerCase().includes(search)
+        )
+      })
+      .sort((a, b) => a.createdAt - b.createdAt)
+  }, [subjugations, filterStatus, searchTerm])
+
+  // ==========================================================
+  // FORMULÁRIOS
+  // ==========================================================
+
+  function openCreateForm() {
+    setEditingCreature(undefined)
+    setShowForm(true)
+  }
+
+  function openEditForm(creature: Subjugation) {
+    setEditingCreature(creature)
+    setShowForm(true)
+  }
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingCreature(undefined)
+  }
+
+  // ==========================================================
+  // CRIAÇÃO E EDIÇÃO
+  // ==========================================================
+
+  function handleSave(data: SubjugationFormData) {
+    if (editingCreature) {
+      const updatedCreature: Subjugation = {
+        ...editingCreature,
+        ...data,
+      }
+
+      const discoveryChanged =
+        editingCreature.discoveryStatus !== updatedCreature.discoveryStatus
+
+      const vitalityChanged =
+        editingCreature.isAlive !== updatedCreature.isAlive
+
+      const {
+        discoveryStatus: oldDiscoveryStatus,
+        isAlive: oldIsAlive,
+        ...oldOtherData
+      } = editingCreature
+
+      const {
+        discoveryStatus: newDiscoveryStatus,
+        isAlive: newIsAlive,
+        ...newOtherData
+      } = updatedCreature
+
+      const otherDataChanged =
+        JSON.stringify(oldOtherData) !== JSON.stringify(newOtherData)
+
+      // Alterações gerais nos dados da criatura.
+      if (otherDataChanged) {
+        recordAudit({
+          action: 'Editado',
+          entityType: 'Subjugação',
+          entityId: updatedCreature.id,
+          entityName: updatedCreature.name,
+          description: `O registro de "${updatedCreature.name}" foi editado.`,
+          oldData: editingCreature,
+          newData: updatedCreature,
+        })
+      }
+
+      // Alteração do estado de descoberta ou subjugação.
+      if (discoveryChanged) {
+        recordAudit({
+          action: 'Descoberta alterada',
+          entityType: 'Subjugação',
+          entityId: updatedCreature.id,
+          entityName: updatedCreature.name,
+          description: `O estado de descoberta de "${updatedCreature.name}" foi alterado de "${oldDiscoveryStatus}" para "${newDiscoveryStatus}".`,
+          oldData: editingCreature,
+          newData: updatedCreature,
+        })
+      }
+
+      // Alteração da vitalidade.
+      if (vitalityChanged) {
+        recordAudit({
+          action: 'Vitalidade alterada',
+          entityType: 'Subjugação',
+          entityId: updatedCreature.id,
+          entityName: updatedCreature.name,
+          description: `A vitalidade de "${updatedCreature.name}" foi alterada de "${oldIsAlive ? 'Vivo' : 'Morto'}" para "${newIsAlive ? 'Vivo' : 'Morto'}".`,
+          oldData: editingCreature,
+          newData: updatedCreature,
+        })
+      }
+
+      setSubjugations((previous) =>
+        previous.map((creature) =>
+          creature.id === editingCreature.id ? updatedCreature : creature,
+        ),
+      )
+    } else {
+      // Criação de nova criatura.
+      const newCreature: Subjugation = {
+        ...data,
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+      }
+
+      recordAudit({
+        action: 'Criado',
+        entityType: 'Subjugação',
+        entityId: newCreature.id,
+        entityName: newCreature.name,
+        description: `A criatura "${newCreature.name}" foi adicionada ao registro de subjugação.`,
+        newData: newCreature,
+      })
+
+      setSubjugations((previous) => [...previous, newCreature])
+    }
+
+    closeForm()
+  }
+
+  // ==========================================================
+  // EXCLUSÃO
+  // ==========================================================
+
+  function handleDelete(creature: Subjugation) {
+    const confirmed = window.confirm(
+      `Tem certeza de que deseja excluir "${creature.name}"?\n\nEssa ação não poderá ser desfeita.`,
+    )
+
+    if (!confirmed) return
+
+    recordAudit({
+      action: 'Excluído',
+      entityType: 'Subjugação',
+      entityId: creature.id,
+      entityName: creature.name,
+      description: `A criatura "${creature.name}" foi removida do registro de subjugação.`,
+      oldData: creature,
+    })
+
+    setSubjugations((previous) =>
+      previous.filter((item) => item.id !== creature.id),
+    )
+  }
+
+  // ==========================================================
+  // INTERAÇÃO COM AS CRIATURAS
+  // ==========================================================
+
+  function handleCreatureClick(creature: Subjugation) {
+    if (creature.discoveryStatus === 'Não descoberta') {
+      setModalType('unknown')
+      return
+    }
+
+    if (creature.discoveryStatus === 'Descoberta') {
+      setModalType('locked')
+      return
+    }
+
+    if (creature.discoveryStatus === 'Subjugada') {
+      if (creature.externalUrl?.trim()) {
+        window.open(
+          creature.externalUrl,
+          '_blank',
+          'noopener,noreferrer',
+        )
+      } else {
+        setModalType('missing-link')
+      }
+    }
+  }
+
+  function closeModal() {
+    setModalType(null)
+  }
+
+  const statusOptions: FilterStatus[] = [
+    'Todas',
+    'Subjugada',
+    'Descoberta',
+    'Não descoberta',
+  ]
+
+  // ==========================================================
+  // INTERFACE
+  // ==========================================================
+
   return (
-    <ModulePlaceholder
-      title="Ritual de Subjugação"
-      description="Acompanhe as criaturas submetidas à sua vontade e aquelas que ainda aguardam sua conquista."
-    />
+    <div className="space-y-8">
+      {/* Cabeçalho */}
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-purple-500/10 p-3">
+              <Skull className="h-7 w-7 text-purple-400" />
+            </div>
+
+            <div>
+              <h1 className="text-2xl font-bold text-white">
+                Ritual de Subjugação
+              </h1>
+
+              <p className="text-sm text-gray-400">
+                O conhecimento é uma corrente. A vontade, a chave.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={openCreateForm}
+          className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+        >
+          <Plus className="h-4 w-4" />
+          Nova criatura
+        </button>
+      </div>
+
+      {/* Indicadores */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <StatCard
+          label="Criaturas subjugadas"
+          value={totalSubjugated}
+          icon={<Shield className="h-5 w-5" />}
+          color="text-green-400"
+        />
+
+        <StatCard
+          label="Criaturas descobertas"
+          value={totalDiscovered}
+          icon={<Unlock className="h-5 w-5" />}
+          color="text-purple-400"
+        />
+
+        <StatCard
+          label="Subjugadas mortas"
+          value={totalDead}
+          icon={<HeartCrack className="h-5 w-5" />}
+          color="text-red-400"
+        />
+      </div>
+
+      {/* Pesquisa e filtros */}
+      <div className="space-y-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+        <div className="flex flex-col gap-3 lg:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Pesquisar criaturas descobertas..."
+              className="w-full rounded-lg border border-white/10 bg-black/30 py-3 pl-10 pr-4 text-sm text-white outline-none transition focus:border-purple-500/50"
+            />
+          </div>
+
+          <button
+            onClick={() => setShowMobileFilters(!showMobileFilters)}
+            className="flex items-center justify-center gap-2 rounded-lg border border-white/10 px-4 py-3 text-sm text-gray-300 transition hover:bg-white/5 lg:hidden"
+          >
+            <Filter className="h-4 w-4" />
+            Filtros
+          </button>
+
+          <div className="hidden flex-wrap gap-2 lg:flex">
+            {statusOptions.map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={`rounded-lg px-4 py-2 text-sm transition ${
+                  filterStatus === status
+                    ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {showMobileFilters && (
+          <div className="grid grid-cols-2 gap-2 lg:hidden">
+            {statusOptions.map((status) => (
+              <button
+                key={status}
+                onClick={() => {
+                  setFilterStatus(status)
+                  setShowMobileFilters(false)
+                }}
+                className={`rounded-lg px-3 py-2 text-sm transition ${
+                  filterStatus === status
+                    ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/40'
+                    : 'bg-white/5 text-gray-400'
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Galeria */}
+      {filteredSubjugations.length === 0 ? (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] py-16 text-center">
+          <Search className="mx-auto mb-3 h-8 w-8 text-gray-600" />
+
+          <p className="text-gray-400">
+            Nenhuma criatura encontrada.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+          {filteredSubjugations.map((creature) => {
+            const isUnknown =
+              creature.discoveryStatus === 'Não descoberta'
+
+            const isDiscovered =
+              creature.discoveryStatus === 'Descoberta'
+
+            const isSubjugated =
+              creature.discoveryStatus === 'Subjugada'
+
+            return (
+              <div
+                key={creature.id}
+                className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] transition hover:-translate-y-1 hover:border-purple-500/40 hover:bg-white/[0.04]"
+              >
+                <button
+                  onClick={() => handleCreatureClick(creature)}
+                  className="block w-full text-left"
+                >
+                  <div className="relative aspect-[4/5] overflow-hidden bg-gradient-to-br from-gray-900 to-black">
+                    {isUnknown ? (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <span className="text-5xl font-bold tracking-widest text-gray-600">
+                          ???
+                        </span>
+                      </div>
+                    ) : creature.imageUrl ? (
+                      <img
+                        src={creature.imageUrl}
+                        alt={creature.name}
+                        className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${
+                          isDiscovered ? 'grayscale brightness-75' : ''
+                        }`}
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <Skull className="h-16 w-16 text-gray-700" />
+                      </div>
+                    )}
+
+                    <div className="absolute left-3 top-3">
+                      {isSubjugated && (
+                        <span className="rounded-md border border-green-500/30 bg-green-950/80 px-2 py-1 text-xs font-medium text-green-300">
+                          Subjugada
+                        </span>
+                      )}
+
+                      {isDiscovered && (
+                        <span className="rounded-md border border-gray-500/30 bg-black/80 px-2 py-1 text-xs font-medium text-gray-300">
+                          Descoberta
+                        </span>
+                      )}
+
+                      {isUnknown && (
+                        <span className="rounded-md border border-red-500/30 bg-red-950/80 px-2 py-1 text-xs font-medium text-red-300">
+                          Desconhecida
+                        </span>
+                      )}
+                    </div>
+
+                    {isSubjugated && (
+                      <div className="absolute right-3 top-3">
+                        <span
+                          className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                            creature.isAlive
+                              ? 'bg-green-950/80 text-green-400'
+                              : 'bg-red-950/80 text-red-400'
+                          }`}
+                        >
+                          {creature.isAlive ? (
+                            <Heart className="h-4 w-4" />
+                          ) : (
+                            <HeartCrack className="h-4 w-4" />
+                          )}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-3 right-3">
+                      {isSubjugated && (
+                        <ExternalLink className="h-4 w-4 text-white/80" />
+                      )}
+
+                      {isDiscovered && (
+                        <LockKeyhole className="h-4 w-4 text-white/80" />
+                      )}
+
+                      {isUnknown && (
+                        <LockKeyhole className="h-4 w-4 text-red-400" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 p-3">
+                    <h3 className="truncate font-semibold text-white">
+                      {isUnknown ? '???' : creature.name}
+                    </h3>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-400">
+                        CR {isUnknown ? '???' : creature.challengeRating}
+                      </span>
+
+                      {isSubjugated && (
+                        <span
+                          className={`text-xs ${
+                            creature.isAlive
+                              ? 'text-green-400'
+                              : 'text-red-400'
+                          }`}
+                        >
+                          {creature.isAlive ? 'Vivo' : 'Morto'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Controles administrativos do protótipo */}
+                <div className="flex items-center justify-end gap-2 border-t border-white/10 px-3 py-2">
+                  <button
+                    onClick={() => openEditForm(creature)}
+                    title="Editar criatura"
+                    className="rounded-md p-2 text-gray-400 transition hover:bg-purple-500/10 hover:text-purple-300"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(creature)}
+                    title="Excluir criatura"
+                    className="rounded-md p-2 text-gray-400 transition hover:bg-red-500/10 hover:text-red-400"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Formulário de criação e edição */}
+      {showForm && (
+        <SubjugationFormModal
+          initialData={editingCreature}
+          onSave={handleSave}
+          onClose={closeForm}
+        />
+      )}
+
+      {/* Modais de interação */}
+      {modalType && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={closeModal}
+        >
+          <div
+            className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#151515] p-7 text-center shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              onClick={closeModal}
+              className="absolute right-4 top-4 rounded-lg p-2 text-gray-500 transition hover:bg-white/5 hover:text-white"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {modalType === 'unknown' && (
+              <>
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+                  <LockKeyhole className="h-8 w-8 text-red-400" />
+                </div>
+
+                <h2 className="mb-3 text-lg font-bold text-white">
+                  Conhecimento proibido
+                </h2>
+
+                <p className="mb-7 text-sm leading-relaxed text-gray-400">
+                  Seu cérebro não comportaria tal conhecimento ainda
+                </p>
+
+                <button
+                  onClick={closeModal}
+                  className="rounded-lg border border-red-500/30 bg-red-500/10 px-8 py-2.5 text-sm font-medium text-red-300 transition hover:bg-red-500/20"
+                >
+                  Aff
+                </button>
+              </>
+            )}
+
+            {modalType === 'locked' && (
+              <>
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-purple-500/10">
+                  <LockKeyhole className="h-8 w-8 text-purple-400" />
+                </div>
+
+                <h2 className="mb-3 text-lg font-bold text-white">
+                  Subjugação indisponível
+                </h2>
+
+                <p className="mb-7 text-sm leading-relaxed text-gray-400">
+                  Você ainda não foi forte o suficiente para desbloquear isso
+                </p>
+
+                <button
+                  onClick={closeModal}
+                  className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-8 py-2.5 text-sm font-medium text-purple-300 transition hover:bg-purple-500/20"
+                >
+                  Aff
+                </button>
+              </>
+            )}
+
+            {modalType === 'missing-link' && (
+              <>
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/10">
+                  <ExternalLink className="h-8 w-8 text-yellow-400" />
+                </div>
+
+                <h2 className="mb-3 text-lg font-bold text-white">
+                  Registro incompleto
+                </h2>
+
+                <p className="mb-7 text-sm leading-relaxed text-gray-400">
+                  Esta criatura foi subjugada, mas ainda não possui um
+                  direcionamento externo cadastrado.
+                </p>
+
+                <button
+                  onClick={closeModal}
+                  className="rounded-lg border border-white/10 bg-white/5 px-8 py-2.5 text-sm font-medium text-gray-300 transition hover:bg-white/10"
+                >
+                  Fechar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// COMPONENTE DOS INDICADORES
+// ============================================================
+
+interface StatCardProps {
+  label: string
+  value: number
+  icon: React.ReactNode
+  color: string
+}
+
+function StatCard({ label, value, icon, color }: StatCardProps) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs text-gray-400">{label}</span>
+        <span className={color}>{icon}</span>
+      </div>
+
+      <p className={`text-3xl font-bold ${color}`}>{value}</p>
+    </div>
   )
 }
