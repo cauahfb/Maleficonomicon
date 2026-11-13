@@ -30,7 +30,6 @@ function isValidUUID(value: string): boolean {
 function parseSignedDate(value: string): string | null {
   if (!value) return null
 
-  // Converte DD/MM/YYYY para YYYY-MM-DD.
   const brazilianDate = value.match(
     /^(\d{2})\/(\d{2})\/(\d{4})$/,
   )
@@ -39,7 +38,6 @@ function parseSignedDate(value: string): string | null {
     return `${brazilianDate[3]}-${brazilianDate[2]}-${brazilianDate[1]}`
   }
 
-  // Aceita também datas já no formato ISO.
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return value
   }
@@ -93,7 +91,7 @@ function mapContractToDatabase(
     name: contract.name,
     essence_id:
       essenceId &&
-      (!validEssenceIds || validEssenceIds.has(essenceId))
+        (!validEssenceIds || validEssenceIds.has(essenceId))
         ? essenceId
         : null,
     contractor_name: contract.contractorName,
@@ -107,6 +105,19 @@ function mapContractToDatabase(
     created_at: new Date(contract.createdAt).toISOString(),
     updated_at: new Date(contract.updatedAt).toISOString(),
   }
+}
+
+async function isCurrentUserAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('is_admin')
+
+  if (error) {
+    console.error('Erro ao verificar permissões administrativas:', error)
+    throw new Error('Não foi possível verificar as permissões do usuário.', {
+      cause: error,
+    })
+  }
+
+  return data === true
 }
 
 function getLegacyContracts(): Contract[] {
@@ -131,7 +142,6 @@ function getLegacyContracts(): Contract[] {
 }
 
 async function migrateLegacyContracts(): Promise<void> {
-  // Evita executar a migração novamente no mesmo navegador.
   if (localStorage.getItem(MIGRATION_KEY) === 'true') {
     return
   }
@@ -142,7 +152,6 @@ async function migrateLegacyContracts(): Promise<void> {
     return
   }
 
-  // Recupera os IDs de essências existentes no Supabase.
   const { data: essences, error: essenceError } = await supabase
     .from('essences')
     .select('id')
@@ -180,8 +189,6 @@ async function migrateLegacyContracts(): Promise<void> {
     )
   }
 
-  // Marca a migração para impedir importações futuras acidentais.
-  // O localStorage original permanece preservado.
   localStorage.setItem(MIGRATION_KEY, 'true')
 
   console.info(
@@ -190,10 +197,16 @@ async function migrateLegacyContracts(): Promise<void> {
 }
 
 export async function getContracts(): Promise<Contract[]> {
-  await migrateLegacyContracts()
+  const isAdmin = await isCurrentUserAdmin()
+
+  if (isAdmin) {
+    await migrateLegacyContracts()
+  }
+
+  const table = isAdmin ? 'contracts' : 'public_contracts'
 
   const { data, error } = await supabase
-    .from('contracts')
+    .from(table)
     .select('*')
     .order('created_at', { ascending: false })
 
@@ -228,6 +241,32 @@ export async function saveContract(
   }
 
   return mapDatabaseContract(data as ContractDatabase)
+}
+
+export async function toggleContractStatus(
+  id: string,
+): Promise<Contract['status']> {
+  const { data, error } = await supabase.rpc(
+    'toggle_contract_status',
+    {
+      p_contract_id: id,
+    },
+  )
+
+  if (error) {
+    console.error('Erro ao alterar estado do contrato:', error)
+
+    throw new Error(
+      error.message || 'Não foi possível alterar o estado do contrato.',
+      { cause: error },
+    )
+  }
+
+  if (data !== 'Ativo' && data !== 'Inativo') {
+    throw new Error('O banco retornou um estado de contrato inválido.')
+  }
+
+  return data
 }
 
 export async function deleteContract(

@@ -102,14 +102,45 @@ function mapEssenceToDatabase(essence: Essence) {
   }
 }
 
+async function isCurrentUserAdmin(): Promise<boolean> {
+  const { data, error } = await supabase.rpc('is_admin')
+
+  if (error) {
+    console.error('Erro ao verificar permissões administrativas:', error)
+    throw new Error('Não foi possível verificar as permissões do usuário.', {
+      cause: error,
+    })
+  }
+
+  return data === true
+}
+
 export async function getEssences(): Promise<Essence[]> {
+  const isAdmin = await isCurrentUserAdmin()
+
+  if (isAdmin) {
+    const { data, error } = await supabase
+      .from('essences')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Erro ao carregar essências:', error)
+      throw new Error('Não foi possível carregar as essências.', {
+        cause: error,
+      })
+    }
+
+    return (data as EssenceDatabase[]).map(mapDatabaseEssence)
+  }
+
   const { data, error } = await supabase
-    .from('essences')
+    .from('public_essences')
     .select('*')
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('Erro ao carregar essências:', error)
+    console.error('Erro ao carregar essências públicas:', error)
     throw new Error('Não foi possível carregar as essências.', {
       cause: error,
     })

@@ -1,5 +1,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../hooks/useAuth'
 import {
   Search,
   Filter,
@@ -13,6 +14,8 @@ import {
   Trash2,
   X,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 
 import EssenceFormModal from '../components/ui/EssenceFormModal'
@@ -36,6 +39,8 @@ import type { AuditLogFormData } from '../types/auditLog'
 // ESTILOS E CONFIGURAÇÕES
 // ============================================================
 
+const ITEMS_PER_PAGE = 10
+
 const statusStyles: Record<EssenceStatus, string> = {
   Registrado: 'bg-zinc-800 text-zinc-300 border-zinc-700',
   Contratado: 'bg-red-950/60 text-red-300 border-red-900',
@@ -53,6 +58,8 @@ const natureStyles: Record<EssenceNature, string> = {
 // ============================================================
 
 export default function Essences() {
+  const { isAdmin } = useAuth()
+
   const [essences, setEssences] = useState<Essence[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -65,6 +72,8 @@ export default function Essences() {
   const [trueNameFilter, setTrueNameFilter] = useState('Todos')
   const [sortOrder, setSortOrder] = useState('newest')
   const [filtersOpen, setFiltersOpen] = useState(false)
+
+  const [currentPage, setCurrentPage] = useState(1)
 
   const [selectedEssence, setSelectedEssence] =
     useState<Essence | null>(null)
@@ -201,6 +210,39 @@ export default function Essences() {
   ])
 
   // ==========================================================
+  // PAGINAÇÃO
+  // ==========================================================
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredEssences.length / ITEMS_PER_PAGE),
+  )
+
+  // Impede que a página atual ultrapasse o total disponível.
+  // Isso também resolve o caso em que uma exclusão reduz
+  // o número de páginas.
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+
+  const paginatedEssences = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE
+
+    return filteredEssences.slice(
+      startIndex,
+      startIndex + ITEMS_PER_PAGE,
+    )
+  }, [filteredEssences, safeCurrentPage])
+
+  const startItem =
+    filteredEssences.length === 0
+      ? 0
+      : (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1
+
+  const endItem = Math.min(
+    safeCurrentPage * ITEMS_PER_PAGE,
+    filteredEssences.length,
+  )
+
+  // ==========================================================
   // CONTADORES
   // ==========================================================
 
@@ -217,7 +259,7 @@ export default function Essences() {
   // ==========================================================
 
   async function handleSave(data: EssenceFormData) {
-    if (saving || loading || loadError) return
+    if (!isAdmin || saving || loading || loadError) return
 
     const savedEssence: Essence = editingEssence
       ? {
@@ -234,10 +276,8 @@ export default function Essences() {
     setOperationError('')
 
     try {
-      // Primeiro salva no Supabase.
       await saveEssences([savedEssence])
 
-      // Registra a atividade administrativa.
       await recordAudit({
         action: editingEssence ? 'Editado' : 'Criado',
         entityType: 'Essência',
@@ -256,7 +296,6 @@ export default function Essences() {
             }),
       })
 
-      // Atualiza a interface somente após salvar no banco.
       setEssences((current) =>
         editingEssence
           ? current.map((essence) =>
@@ -266,6 +305,10 @@ export default function Essences() {
             )
           : [savedEssence, ...current],
       )
+
+      if (!editingEssence) {
+        setCurrentPage(1)
+      }
 
       setFormOpen(false)
       setEditingEssence(null)
@@ -278,7 +321,7 @@ export default function Essences() {
   }
 
   function handleNewEssence() {
-    if (loading || loadError || saving) return
+    if (!isAdmin || loading || loadError || saving) return
 
     setSelectedEssence(null)
     setEditingEssence(null)
@@ -286,7 +329,7 @@ export default function Essences() {
   }
 
   function handleEdit(essence: Essence) {
-    if (loading || loadError || saving) return
+    if (!isAdmin || loading || loadError || saving) return
 
     setSelectedEssence(null)
     setEditingEssence(essence)
@@ -298,100 +341,96 @@ export default function Essences() {
   // ==========================================================
 
   async function handleDelete(essence: Essence) {
-  if (saving || loading || loadError) return
+    if (!isAdmin || saving || loading || loadError) return
 
-  setSaving(true)
-  setOperationError('')
+    setSaving(true)
+    setOperationError('')
 
-  try {
-    // Busca os contratos diretamente no Supabase.
-    const contracts = await getContracts()
+    try {
+      const contracts = await getContracts()
 
-    const associatedContracts = contracts.filter(
-      (contract) => contract.essenceId === essence.id,
-    )
-
-    let confirmationMessage =
-      `Tem certeza de que deseja excluir "${essence.name}"?\n\n` +
-      'Essa ação removerá o registro da biblioteca. ' +
-      'Ela não significa que a criatura foi erradicada no mundo do jogo.'
-
-    if (associatedContracts.length > 0) {
-      const contractNames = associatedContracts
-        .map((contract) => `• ${contract.name}`)
-        .join('\n')
-
-      confirmationMessage +=
-        `\n\nEsta essência possui ${associatedContracts.length} contrato(s) associado(s):\n\n` +
-        `${contractNames}\n\n` +
-        'Os contratos serão preservados no histórico e desvinculados desta essência.'
-    }
-
-    const confirmed = window.confirm(confirmationMessage)
-
-    if (!confirmed) return
-
-    // Desvincula os contratos antes de excluir a essência.
-    if (associatedContracts.length > 0) {
-      const now = Date.now()
-
-      const updatedContracts = associatedContracts.map((contract) => ({
-        ...contract,
-        essenceId: null,
-        contractorName: contract.contractorName || essence.name,
-        updatedAt: now,
-      }))
-
-      // Persiste as alterações no Supabase.
-      await Promise.all(
-        updatedContracts.map((contract) => saveContract(contract)),
+      const associatedContracts = contracts.filter(
+        (contract) => contract.essenceId === essence.id,
       )
 
-      // Registra as alterações no histórico administrativo.
-      await Promise.all(
-        associatedContracts.map((contract, index) => {
-          const updatedContract = updatedContracts[index]
+      let confirmationMessage =
+        `Tem certeza de que deseja excluir "${essence.name}"?\n\n` +
+        'Essa ação removerá o registro da biblioteca. ' +
+        'Ela não significa que a criatura foi erradicada no mundo do jogo.'
 
-          return recordAudit({
-            action: 'Editado',
-            entityType: 'Contrato',
-            entityId: contract.id,
-            entityName: contract.name,
-            description:
-              `O contrato ${contract.name} foi desvinculado da essência ${essence.name}, que foi excluída do registro.`,
-            oldData: contract,
-            newData: updatedContract,
-          })
-        }),
+      if (associatedContracts.length > 0) {
+        const contractNames = associatedContracts
+          .map((contract) => `• ${contract.name}`)
+          .join('\n')
+
+        confirmationMessage +=
+          `\n\nEsta essência possui ${associatedContracts.length} contrato(s) associado(s):\n\n` +
+          `${contractNames}\n\n` +
+          'Os contratos serão preservados no histórico e desvinculados desta essência.'
+      }
+
+      const confirmed = window.confirm(confirmationMessage)
+
+      if (!confirmed) return
+
+      if (associatedContracts.length > 0) {
+        const now = Date.now()
+
+        const updatedContracts = associatedContracts.map((contract) => ({
+          ...contract,
+          essenceId: null,
+          contractorName: contract.contractorName || essence.name,
+          updatedAt: now,
+        }))
+
+        await Promise.all(
+          updatedContracts.map((contract) => saveContract(contract)),
+        )
+
+        await Promise.all(
+          associatedContracts.map((contract, index) => {
+            const updatedContract = updatedContracts[index]
+
+            return recordAudit({
+              action: 'Editado',
+              entityType: 'Contrato',
+              entityId: contract.id,
+              entityName: contract.name,
+              description:
+                `O contrato ${contract.name} foi desvinculado da essência ${essence.name}, que foi excluída do registro.`,
+              oldData: contract,
+              newData: updatedContract,
+            })
+          }),
+        )
+      }
+
+      await deleteEssence(essence.id)
+
+      await recordAudit({
+        action: 'Excluído',
+        entityType: 'Essência',
+        entityId: essence.id,
+        entityName: essence.name,
+        description: `A essência ${essence.name} foi removida da biblioteca.`,
+        oldData: essence,
+      })
+
+      setEssences((current) =>
+        current.filter((item) => item.id !== essence.id),
       )
+
+      setSelectedEssence(null)
+    } catch (error) {
+      console.error('Erro ao excluir essência:', error)
+      setOperationError(
+        'Não foi possível excluir a essência ou desvincular seus contratos.',
+      )
+    } finally {
+      setSaving(false)
     }
-
-    // Exclui a essência somente depois de desvincular os contratos.
-    await deleteEssence(essence.id)
-
-    await recordAudit({
-      action: 'Excluído',
-      entityType: 'Essência',
-      entityId: essence.id,
-      entityName: essence.name,
-      description: `A essência ${essence.name} foi removida da biblioteca.`,
-      oldData: essence,
-    })
-
-    setEssences((current) =>
-      current.filter((item) => item.id !== essence.id),
-    )
-
-    setSelectedEssence(null)
-  } catch (error) {
-    console.error('Erro ao excluir essência:', error)
-    setOperationError(
-      'Não foi possível excluir a essência ou desvincular seus contratos.',
-    )
-  } finally {
-    setSaving(false)
   }
-}
+
   // ==========================================================
   // FECHAR MODAL DE DETALHES COM ESC
   // ==========================================================
@@ -422,6 +461,7 @@ export default function Essences() {
     setStatusFilter('Todos')
     setTrueNameFilter('Todos')
     setSortOrder('newest')
+    setCurrentPage(1)
   }
 
   // ==========================================================
@@ -449,14 +489,16 @@ export default function Essences() {
           </p>
         </div>
 
-        <button
-          onClick={handleNewEssence}
-          disabled={loading || Boolean(loadError) || saving}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus size={18} />
-          Nova Essência
-        </button>
+        {isAdmin && (
+          <button
+            onClick={handleNewEssence}
+            disabled={loading || Boolean(loadError) || saving}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={18} />
+            Nova Essência
+          </button>
+        )}
       </div>
 
       {/* CARREGAMENTO E ERROS */}
@@ -534,7 +576,10 @@ export default function Essences() {
             <input
               type="text"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setCurrentPage(1)
+              }}
               placeholder="Pesquisar por nome, título, epíteto, nome verdadeiro ou talismã..."
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-3 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-red-800"
             />
@@ -561,7 +606,10 @@ export default function Essences() {
 
             <select
               value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value)}
+              onChange={(event) => {
+                setSortOrder(event.target.value)
+                setCurrentPage(1)
+              }}
               className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-3 text-sm text-zinc-300 outline-none focus:border-red-800"
             >
               <option value="newest">Mais recentes</option>
@@ -578,7 +626,10 @@ export default function Essences() {
           <div className="flex flex-1 flex-col gap-3 sm:flex-row">
             <select
               value={natureFilter}
-              onChange={(event) => setNatureFilter(event.target.value)}
+              onChange={(event) => {
+                setNatureFilter(event.target.value)
+                setCurrentPage(1)
+              }}
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-300 outline-none focus:border-red-800"
             >
               <option value="Todas">Todas as naturezas</option>
@@ -588,7 +639,10 @@ export default function Essences() {
 
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              onChange={(event) => {
+                setStatusFilter(event.target.value)
+                setCurrentPage(1)
+              }}
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-300 outline-none focus:border-red-800"
             >
               <option value="Todos">Todos os estados</option>
@@ -600,7 +654,10 @@ export default function Essences() {
 
             <select
               value={trueNameFilter}
-              onChange={(event) => setTrueNameFilter(event.target.value)}
+              onChange={(event) => {
+                setTrueNameFilter(event.target.value)
+                setCurrentPage(1)
+              }}
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-300 outline-none focus:border-red-800"
             >
               <option value="Todos">Nome verdadeiro: Todos</option>
@@ -610,7 +667,10 @@ export default function Essences() {
 
             <select
               value={sortOrder}
-              onChange={(event) => setSortOrder(event.target.value)}
+              onChange={(event) => {
+                setSortOrder(event.target.value)
+                setCurrentPage(1)
+              }}
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-300 outline-none focus:border-red-800 lg:hidden"
             >
               <option value="newest">Mais recentes</option>
@@ -635,11 +695,11 @@ export default function Essences() {
         <p className="text-sm text-zinc-500">
           Exibindo{' '}
           <span className="font-medium text-zinc-300">
-            {filteredEssences.length}
+            {startItem}–{endItem}
           </span>{' '}
           de{' '}
           <span className="font-medium text-zinc-300">
-            {essences.length}
+            {filteredEssences.length}
           </span>{' '}
           essências
         </p>
@@ -678,7 +738,7 @@ export default function Essences() {
           </thead>
 
           <tbody className="divide-y divide-zinc-800/70">
-            {filteredEssences.map((essence) => (
+            {paginatedEssences.map((essence) => (
               <tr
                 key={essence.id}
                 className="transition hover:bg-zinc-900/50"
@@ -742,21 +802,25 @@ export default function Essences() {
                       <Eye size={17} />
                     </button>
 
-                    <button
-                      onClick={() => handleEdit(essence)}
-                      title="Editar"
-                      className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
-                    >
-                      <Pencil size={17} />
-                    </button>
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={() => handleEdit(essence)}
+                          title="Editar"
+                          className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
+                        >
+                          <Pencil size={17} />
+                        </button>
 
-                    <button
-                      onClick={() => handleDelete(essence)}
-                      title="Excluir"
-                      className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
-                    >
-                      <Trash2 size={17} />
-                    </button>
+                        <button
+                          onClick={() => handleDelete(essence)}
+                          title="Excluir"
+                          className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -768,7 +832,7 @@ export default function Essences() {
       {/* LISTAGEM MOBILE */}
 
       <div className="grid grid-cols-1 gap-3 md:hidden">
-        {filteredEssences.map((essence) => (
+        {paginatedEssences.map((essence) => (
           <div
             key={essence.id}
             className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4"
@@ -830,25 +894,68 @@ export default function Essences() {
                 <Eye size={17} />
               </button>
 
-              <button
-                onClick={() => handleEdit(essence)}
-                className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
-                title="Editar"
-              >
-                <Pencil size={17} />
-              </button>
+              {isAdmin && (
+                <>
+                  <button
+                    onClick={() => handleEdit(essence)}
+                    className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
+                    title="Editar"
+                  >
+                    <Pencil size={17} />
+                  </button>
 
-              <button
-                onClick={() => handleDelete(essence)}
-                className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
-                title="Excluir"
-              >
-                <Trash2 size={17} />
-              </button>
+                  <button
+                    onClick={() => handleDelete(essence)}
+                    className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
+                    title="Excluir"
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         ))}
       </div>
+
+      {/* PAGINAÇÃO */}
+
+      {filteredEssences.length > ITEMS_PER_PAGE && (
+        <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
+          <button
+            onClick={() =>
+              setCurrentPage((page) => Math.max(1, page - 1))
+            }
+            disabled={safeCurrentPage === 1}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/50 px-4 py-2.5 text-sm text-zinc-300 transition hover:border-red-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <ChevronLeft size={16} />
+            Anterior
+          </button>
+
+          <span className="text-sm text-zinc-500">
+            Página{' '}
+            <span className="font-medium text-zinc-200">
+              {safeCurrentPage}
+            </span>{' '}
+            de{' '}
+            <span className="font-medium text-zinc-200">
+              {totalPages}
+            </span>
+          </span>
+
+          <button
+            onClick={() =>
+              setCurrentPage((page) => Math.min(totalPages, page + 1))
+            }
+            disabled={safeCurrentPage === totalPages}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/50 px-4 py-2.5 text-sm text-zinc-300 transition hover:border-red-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            Próxima
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
 
       {/* ESTADO VAZIO */}
 
@@ -1018,25 +1125,27 @@ export default function Essences() {
                 </div>
               )}
 
-              <div className="flex flex-col-reverse justify-between gap-3 border-t border-zinc-800 pt-5 sm:flex-row">
-                <button
-                  onClick={() => handleDelete(selectedEssence)}
-                  disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-900/50 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Trash2 size={16} />
-                  Excluir registro
-                </button>
+              {isAdmin && (
+                <div className="flex flex-col-reverse justify-between gap-3 border-t border-zinc-800 pt-5 sm:flex-row">
+                  <button
+                    onClick={() => handleDelete(selectedEssence)}
+                    disabled={saving}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-900/50 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 size={16} />
+                    Excluir registro
+                  </button>
 
-                <button
-                  onClick={() => handleEdit(selectedEssence)}
-                  disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Pencil size={16} />
-                  Editar registro
-                </button>
-              </div>
+                  <button
+                    onClick={() => handleEdit(selectedEssence)}
+                    disabled={saving}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Pencil size={16} />
+                    Editar registro
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1044,7 +1153,7 @@ export default function Essences() {
 
       {/* MODAL DE CRIAÇÃO E EDIÇÃO */}
 
-      {formOpen && (
+      {isAdmin && formOpen && (
         <EssenceFormModal
           key={editingEssence?.id ?? 'new'}
           initialData={editingEssence ?? undefined}

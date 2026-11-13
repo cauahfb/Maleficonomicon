@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react'
 import {
   Search,
@@ -28,7 +29,9 @@ import {
   getContracts,
   saveContract,
   deleteContract,
+  toggleContractStatus,
 } from '../lib/contractStorage'
+
 import { getEssences } from '../lib/essenceStorage'
 import { addAuditLog } from '../lib/auditLogStorage'
 import type { AuditLogFormData } from '../types/auditLog'
@@ -39,8 +42,9 @@ import { getDahliaLevel } from '../lib/dahliaConfigStorage'
 import {
   getContractLimits,
   validateContractSave,
-  validateContractActivation,
 } from '../lib/contractRules'
+
+import { useAuth } from '../hooks/useAuth'
 
 // ============================================================
 // ESTILOS
@@ -71,6 +75,8 @@ async function recordAudit(data: AuditLogFormData): Promise<void> {
 // ============================================================
 
 export default function Contracts() {
+  const { isAdmin } = useAuth()
+
   const [contracts, setContracts] = useState<Contract[]>([])
   const [contractsLoading, setContractsLoading] = useState(true)
   const [contractsError, setContractsError] = useState('')
@@ -79,29 +85,46 @@ export default function Contracts() {
   const [essencesLoading, setEssencesLoading] = useState(true)
   const [essencesError, setEssencesError] = useState('')
 
-const [dahliaLevel, setDahliaLevel] = useState<number | null>(null)
+  const [dahliaLevel, setDahliaLevel] = useState<number | null>(null)
 
-useEffect(() => {
-  let mounted = true
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('Todos')
+  const [sortOrder, setSortOrder] = useState('newest')
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
-  async function loadDahliaLevel() {
-    try {
-      const level = await getDahliaLevel()
+  const [selectedContract, setSelectedContract] =
+    useState<Contract | null>(null)
 
-      if (mounted) {
-        setDahliaLevel(level)
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingContract, setEditingContract] =
+    useState<Contract | null>(null)
+
+  // ==========================================================
+  // CARREGAMENTO DO NÍVEL DE DAHLIA
+  // ==========================================================
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadDahliaLevel() {
+      try {
+        const level = await getDahliaLevel()
+
+        if (mounted) {
+          setDahliaLevel(level)
+        }
+      } catch (error) {
+        console.error('Erro ao carregar nível da Dhalia:', error)
       }
-    } catch (error) {
-      console.error('Erro ao carregar nível da Dhalia:', error)
     }
-  }
 
-  void loadDahliaLevel()
+    void loadDahliaLevel()
 
-  return () => {
-    mounted = false
-  }
-}, [])
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   // ==========================================================
   // CARREGAMENTO DOS DADOS
   // ==========================================================
@@ -156,6 +179,10 @@ useEffect(() => {
     }
   }, [])
 
+  // ==========================================================
+  // DADOS DERIVADOS
+  // ==========================================================
+
   const contractLimits = getContractLimits(dahliaLevel)
 
   const availableEssences = useMemo(
@@ -163,23 +190,18 @@ useEffect(() => {
     [essences],
   )
 
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('Todos')
-  const [sortOrder, setSortOrder] = useState('newest')
-  const [filtersOpen, setFiltersOpen] = useState(false)
-
-  const [selectedContract, setSelectedContract] =
-    useState<Contract | null>(null)
-
-  const [formOpen, setFormOpen] = useState(false)
-  const [editingContract, setEditingContract] =
-    useState<Contract | null>(null)
-
   // ==========================================================
   // CRIAÇÃO E EDIÇÃO
   // ==========================================================
 
   async function handleSave(data: ContractFormData) {
+    // Segurança adicional no frontend.
+    // A proteção definitiva continua sendo feita pelo RLS.
+    if (!isAdmin) {
+      window.alert('Você não possui permissão para editar contratos.')
+      return
+    }
+
     if (
       contractsLoading ||
       essencesLoading ||
@@ -264,7 +286,16 @@ useEffect(() => {
     }
   }
 
+  // ==========================================================
+  // NOVO CONTRATO
+  // ==========================================================
+
   function handleNewContract() {
+    if (!isAdmin) {
+      window.alert('Você não possui permissão para criar contratos.')
+      return
+    }
+
     if (
       contractsLoading ||
       essencesLoading ||
@@ -278,7 +309,16 @@ useEffect(() => {
     setFormOpen(true)
   }
 
+  // ==========================================================
+  // EDITAR CONTRATO
+  // ==========================================================
+
   function handleEdit(contract: Contract) {
+    if (!isAdmin) {
+      window.alert('Você não possui permissão para editar contratos.')
+      return
+    }
+
     if (
       contractsLoading ||
       essencesLoading ||
@@ -298,6 +338,11 @@ useEffect(() => {
   // ==========================================================
 
   async function handleDelete(contract: Contract) {
+    if (!isAdmin) {
+      window.alert('Você não possui permissão para excluir contratos.')
+      return
+    }
+
     const confirmed = window.confirm(
       `Tem certeza de que deseja excluir o contrato "${contract.name}"?\n\nEssa ação removerá o registro da biblioteca.`,
     )
@@ -335,32 +380,14 @@ useEffect(() => {
   async function handleToggleStatus(contract: Contract) {
     if (
       contractsLoading ||
-      essencesLoading ||
-      contractsError ||
-      essencesError
+      contractsError
     ) {
       window.alert('Aguarde o carregamento dos dados antes de continuar.')
       return
     }
 
-    const nextStatus: ContractStatus =
-      contract.status === 'Ativo' ? 'Inativo' : 'Ativo'
-
-    if (nextStatus === 'Ativo') {
-      const validationError = validateContractActivation({
-        contracts,
-        essences,
-        level: dahliaLevel,
-        contract,
-      })
-
-      if (validationError) {
-        window.alert(validationError)
-        return
-      }
-    }
-
-    const action = nextStatus === 'Ativo' ? 'ativar' : 'desativar'
+    const action =
+      contract.status === 'Ativo' ? 'desativar' : 'ativar'
 
     const confirmed = window.confirm(
       `Deseja realmente ${action} o contrato "${contract.name}"?`,
@@ -368,41 +395,33 @@ useEffect(() => {
 
     if (!confirmed) return
 
-    const updatedContract: Contract = {
-      ...contract,
-      status: nextStatus,
-      updatedAt: Date.now(),
-    }
-
     try {
-      const savedContract = await saveContract(updatedContract)
+      // A RPC executa a alteração no banco e valida as regras
+      // de ativação/desativação independentemente do usuário.
+      const newStatus = await toggleContractStatus(contract.id)
 
-      await recordAudit({
-        action: nextStatus === 'Ativo' ? 'Ativado' : 'Desativado',
-        entityType: 'Contrato',
-        entityId: savedContract.id,
-        entityName: savedContract.name,
-        description: `O contrato "${savedContract.name}" foi ${
-          nextStatus === 'Ativo' ? 'ativado' : 'desativado'
-        }.`,
-        oldData: contract,
-        newData: savedContract,
-      })
+      const updatedContract: Contract = {
+        ...contract,
+        status: newStatus,
+        updatedAt: Date.now(),
+      }
 
       setContracts((current) =>
         current.map((item) =>
-          item.id === savedContract.id ? savedContract : item,
+          item.id === contract.id ? updatedContract : item,
         ),
       )
 
       setSelectedContract((current) =>
-        current?.id === savedContract.id ? savedContract : current,
+        current?.id === contract.id ? updatedContract : current,
       )
     } catch (error) {
       console.error('Erro ao alterar estado do contrato:', error)
 
       window.alert(
-        'Não foi possível alterar o estado do contrato no banco de dados.',
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível alterar o estado do contrato no banco de dados.',
       )
     }
   }
@@ -538,19 +557,21 @@ useEffect(() => {
           </p>
         </div>
 
-        <button
-          onClick={handleNewContract}
-          disabled={
-            contractsLoading ||
-            essencesLoading ||
-            Boolean(contractsError) ||
-            Boolean(essencesError)
-          }
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus size={18} />
-          Novo Contrato
-        </button>
+        {isAdmin && (
+          <button
+            onClick={handleNewContract}
+            disabled={
+              contractsLoading ||
+              essencesLoading ||
+              Boolean(contractsError) ||
+              Boolean(essencesError)
+            }
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={18} />
+            Novo Contrato
+          </button>
+        )}
       </div>
 
       {/* CARREGAMENTO E ERROS */}
@@ -858,34 +879,42 @@ useEffect(() => {
                     <button
                       onClick={() => setSelectedContract(contract)}
                       title="Visualizar"
+                      aria-label={`Visualizar ${contract.name}`}
                       className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-white"
                     >
                       <Eye size={17} />
                     </button>
 
-                    <button
-                      onClick={() => handleEdit(contract)}
-                      title="Editar"
-                      className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
-                    >
-                      <Pencil size={17} />
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleEdit(contract)}
+                        title="Editar"
+                        aria-label={`Editar ${contract.name}`}
+                        className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
+                      >
+                        <Pencil size={17} />
+                      </button>
+                    )}
 
                     <button
                       onClick={() => handleToggleStatus(contract)}
                       title={contract.status === 'Ativo' ? 'Desativar' : 'Ativar'}
+                      aria-label={`${contract.status === 'Ativo' ? 'Desativar' : 'Ativar'} ${contract.name}`}
                       className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-red-400"
                     >
                       <Power size={17} />
                     </button>
 
-                    <button
-                      onClick={() => handleDelete(contract)}
-                      title="Excluir"
-                      className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
-                    >
-                      <Trash2 size={17} />
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDelete(contract)}
+                        title="Excluir"
+                        aria-label={`Excluir ${contract.name}`}
+                        className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    )}
 
                   </div>
                 </td>
@@ -948,34 +977,42 @@ useEffect(() => {
               <button
                 onClick={() => setSelectedContract(contract)}
                 title="Visualizar"
+                aria-label={`Visualizar ${contract.name}`}
                 className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-white"
               >
                 <Eye size={17} />
               </button>
 
-              <button
-                onClick={() => handleEdit(contract)}
-                title="Editar"
-                className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
-              >
-                <Pencil size={17} />
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => handleEdit(contract)}
+                  title="Editar"
+                  aria-label={`Editar ${contract.name}`}
+                  className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
+                >
+                  <Pencil size={17} />
+                </button>
+              )}
 
               <button
                 onClick={() => handleToggleStatus(contract)}
                 title={contract.status === 'Ativo' ? 'Desativar' : 'Ativar'}
+                aria-label={`${contract.status === 'Ativo' ? 'Desativar' : 'Ativar'} ${contract.name}`}
                 className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-red-400"
               >
                 <Power size={17} />
               </button>
 
-              <button
-                onClick={() => handleDelete(contract)}
-                title="Excluir"
-                className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
-              >
-                <Trash2 size={17} />
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => handleDelete(contract)}
+                  title="Excluir"
+                  aria-label={`Excluir ${contract.name}`}
+                  className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
+                >
+                  <Trash2 size={17} />
+                </button>
+              )}
 
             </div>
 
@@ -1148,13 +1185,15 @@ useEffect(() => {
 
               <div className="flex flex-col-reverse justify-between gap-3 border-t border-zinc-800 pt-5 sm:flex-row">
 
-                <button
-                  onClick={() => handleDelete(selectedContract)}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-900/50 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/40"
-                >
-                  <Trash2 size={16} />
-                  Excluir contrato
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleDelete(selectedContract)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-900/50 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/40"
+                  >
+                    <Trash2 size={16} />
+                    Excluir contrato
+                  </button>
+                )}
 
                 <div className="flex flex-col gap-2 sm:flex-row">
 
@@ -1168,13 +1207,15 @@ useEffect(() => {
                       : 'Ativar'}
                   </button>
 
-                  <button
-                    onClick={() => handleEdit(selectedContract)}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-700"
-                  >
-                    <Pencil size={16} />
-                    Editar contrato
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleEdit(selectedContract)}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-700"
+                    >
+                      <Pencil size={16} />
+                      Editar contrato
+                    </button>
+                  )}
 
                 </div>
 
@@ -1188,7 +1229,7 @@ useEffect(() => {
 
       {/* MODAL DE CRIAÇÃO E EDIÇÃO */}
 
-      {formOpen && (
+      {isAdmin && formOpen && (
         <ContractFormModal
           key={editingContract?.id ?? 'new'}
           initialData={editingContract ?? undefined}

@@ -7,7 +7,7 @@ import { useAuth } from '../hooks/useAuth'
 
 export default function Login() {
     const navigate = useNavigate()
-    const { user, isAdmin, loading } = useAuth()
+    const { user, loading } = useAuth()
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -15,10 +15,10 @@ export default function Login() {
     const [error, setError] = useState('')
 
     useEffect(() => {
-        if (!loading && user && isAdmin) {
+        if (!loading && user) {
             navigate('/', { replace: true })
         }
-    }, [user, isAdmin, loading, navigate])
+    }, [user, loading, navigate])
 
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -57,7 +57,7 @@ export default function Login() {
                     </h1>
 
                     <p className="mt-2 text-[10px] uppercase tracking-[0.3em] text-[#71717A]">
-                        Acesso administrativo
+                        Biblioteca restrita
                     </p>
                 </div>
 
@@ -75,15 +75,9 @@ export default function Login() {
                         </h2>
 
                         <p className="mt-2 text-sm leading-relaxed text-[#71717A]">
-                            Informe suas credenciais para acessar as funções administrativas.
+                            Informe suas credenciais para acessar a biblioteca.
                         </p>
                     </div>
-
-                    {user && !isAdmin && !loading && (
-                        <div className="mb-5 rounded-md border border-red-900/60 bg-red-950/30 p-3 text-sm text-red-300">
-                            Esta conta não possui permissão de administrador.
-                        </div>
-                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div>

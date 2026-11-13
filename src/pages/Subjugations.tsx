@@ -1,5 +1,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../hooks/useAuth'
 import {
   Search,
   Skull,
@@ -56,6 +57,8 @@ async function recordAudit(data: AuditLogFormData): Promise<void> {
 // ============================================================
 
 export default function Subjugations() {
+  const { isAdmin } = useAuth()
+
   const [subjugations, setSubjugations] = useState<Subjugation[]>([])
 
   const [loading, setLoading] = useState(true)
@@ -185,7 +188,7 @@ export default function Subjugations() {
   // ==========================================================
 
   function openCreateForm() {
-    if (saving || loading || loadError) return
+    if (!isAdmin || saving || loading || loadError) return
 
     setOperationError('')
     setEditingCreature(undefined)
@@ -193,7 +196,7 @@ export default function Subjugations() {
   }
 
   function openEditForm(creature: Subjugation) {
-    if (saving) return
+    if (!isAdmin || saving || loading || loadError) return
 
     setOperationError('')
     setEditingCreature(creature)
@@ -212,7 +215,7 @@ export default function Subjugations() {
   // ==========================================================
 
   async function handleSave(data: SubjugationFormData): Promise<void> {
-    if (saving) return
+    if (!isAdmin || saving || loading || loadError) return
 
     setSaving(true)
     setOperationError('')
@@ -363,7 +366,7 @@ export default function Subjugations() {
   // ==========================================================
 
   async function handleDelete(creature: Subjugation) {
-    if (saving || loading) return
+    if (!isAdmin || saving || loading || loadError) return
 
     const confirmed = window.confirm(
       `Tem certeza de que deseja excluir "${creature.name}"?\n\nEssa ação não poderá ser desfeita.`,
@@ -442,9 +445,9 @@ export default function Subjugations() {
     'Não descoberta',
   ]
 
-  // ==========================================================
+  // ============================================================
   // INTERFACE
-  // ==========================================================
+  // ============================================================
 
   return (
     <div className="space-y-8">
@@ -468,14 +471,16 @@ export default function Subjugations() {
           </div>
         </div>
 
-        <button
-          onClick={openCreateForm}
-          disabled={loading || saving || !!loadError}
-          className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus className="h-4 w-4" />
-          Nova criatura
-        </button>
+        {isAdmin && (
+          <button
+            onClick={openCreateForm}
+            disabled={loading || saving || !!loadError}
+            className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+            Nova Criatura
+          </button>
+        )}
       </div>
 
       {/* Estados de carregamento e erro */}
@@ -726,25 +731,27 @@ export default function Subjugations() {
                   </button>
 
                   {/* Controles administrativos */}
-                  <div className="flex items-center justify-end gap-2 border-t border-white/10 px-3 py-2">
-                    <button
-                      onClick={() => openEditForm(creature)}
-                      disabled={saving}
-                      title="Editar criatura"
-                      className="rounded-md p-2 text-gray-400 transition hover:bg-purple-500/10 hover:text-purple-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
+                  {isAdmin && (
+                    <div className="flex items-center justify-end gap-2 border-t border-white/10 px-3 py-2">
+                      <button
+                        onClick={() => openEditForm(creature)}
+                        disabled={saving}
+                        title="Editar criatura"
+                        className="rounded-md p-2 text-gray-400 transition hover:bg-purple-500/10 hover:text-purple-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
 
-                    <button
-                      onClick={() => void handleDelete(creature)}
-                      disabled={saving}
-                      title="Excluir criatura"
-                      className="rounded-md p-2 text-gray-400 transition hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => void handleDelete(creature)}
+                        disabled={saving}
+                        title="Excluir criatura"
+                        className="rounded-md p-2 text-gray-400 transition hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -753,7 +760,7 @@ export default function Subjugations() {
       )}
 
       {/* Formulário de criação e edição */}
-      {showForm && (
+      {isAdmin && showForm && (
         <SubjugationFormModal
           initialData={editingCreature}
           onSave={handleSave}

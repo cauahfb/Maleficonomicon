@@ -21,7 +21,7 @@ const pageTitles: Record<string, string> = {
 export default function Header({ onOpenMenu }: HeaderProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { isAdmin, signOut } = useAuth()
+  const { signOut } = useAuth()
 
   const [signingOut, setSigningOut] = useState(false)
 
@@ -29,11 +29,13 @@ export default function Header({ onOpenMenu }: HeaderProps) {
     pageTitles[location.pathname] ?? 'Maleficonomicon'
 
   async function handleSignOut() {
+    if (signingOut) return
+
     setSigningOut(true)
 
     try {
       await signOut()
-      navigate('/', { replace: true })
+      navigate('/acesso-restrito', { replace: true })
     } catch (error) {
       console.error('Erro ao encerrar sessão:', error)
     } finally {
@@ -63,19 +65,17 @@ export default function Header({ onOpenMenu }: HeaderProps) {
         </div>
       </div>
 
-      {isAdmin && (
-        <button
-          type="button"
-          onClick={handleSignOut}
-          disabled={signingOut}
-          className="flex items-center gap-2 rounded-md border border-[#3F3F46] px-3 py-2 text-xs text-[#A1A1AA] transition hover:border-[#71717A] hover:bg-[#27272A] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <LogOut size={16} />
-          <span>
-            {signingOut ? 'Saindo...' : 'Sair'}
-          </span>
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={handleSignOut}
+        disabled={signingOut}
+        className="flex items-center gap-2 rounded-md border border-[#3F3F46] px-3 py-2 text-xs text-[#A1A1AA] transition hover:border-[#71717A] hover:bg-[#27272A] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <LogOut size={16} />
+        <span>
+          {signingOut ? 'Saindo...' : 'Sair'}
+        </span>
+      </button>
     </header>
   )
 }
