@@ -503,14 +503,17 @@ export default function Essences() {
           </p>
         </div>
 
-        <button
-          onClick={handleNewEssence}
-          disabled={loading || Boolean(loadError) || saving}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus size={18} />
-          Nova Essência
-        </button>
+        {/* Apenas administradores podem criar novas essências. */}
+        {isAdmin && (
+          <button
+            onClick={handleNewEssence}
+            disabled={loading || Boolean(loadError) || saving}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus size={18} />
+            Nova Essência
+          </button>
+        )}
       </div>
 
       {/* CARREGAMENTO E ERROS */}
