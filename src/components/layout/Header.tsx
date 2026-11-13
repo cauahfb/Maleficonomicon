@@ -1,6 +1,8 @@
 
-import { Bell, Menu, Search } from 'lucide-react'
-import { useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { Menu, LogOut } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../hooks/useAuth'
 
 interface HeaderProps {
   onOpenMenu: () => void
@@ -12,11 +14,32 @@ const pageTitles: Record<string, string> = {
   '/contratos': 'Contratos Infernais',
   '/subjugacao': 'Ritual de Subjugação',
   '/backup': 'Backup',
+  '/historico': 'Histórico Administrativo',
+  '/login': 'Acesso Administrativo',
 }
 
 export default function Header({ onOpenMenu }: HeaderProps) {
   const location = useLocation()
-  const activeTitle = pageTitles[location.pathname] ?? 'Maleficonomicon'
+  const navigate = useNavigate()
+  const { isAdmin, signOut } = useAuth()
+
+  const [signingOut, setSigningOut] = useState(false)
+
+  const activeTitle =
+    pageTitles[location.pathname] ?? 'Maleficonomicon'
+
+  async function handleSignOut() {
+    setSigningOut(true)
+
+    try {
+      await signOut()
+      navigate('/', { replace: true })
+    } catch (error) {
+      console.error('Erro ao encerrar sessão:', error)
+    } finally {
+      setSigningOut(false)
+    }
+  }
 
   return (
     <header className="flex h-20 items-center justify-between border-b border-[#27272A] bg-[#111113] px-5 md:px-10">
@@ -40,21 +63,19 @@ export default function Header({ onOpenMenu }: HeaderProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="hidden items-center gap-2 rounded-md border border-[#27272A] bg-[#09090B] px-3 py-2 md:flex">
-          <Search size={16} className="text-[#71717A]" />
-          <span className="text-xs text-[#71717A]">
-            Pesquisar no grimório...
-          </span>
-        </div>
-
+      {isAdmin && (
         <button
-          className="text-[#A1A1AA] transition hover:text-white"
-          aria-label="Notificações"
+          type="button"
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="flex items-center gap-2 rounded-md border border-[#3F3F46] px-3 py-2 text-xs text-[#A1A1AA] transition hover:border-[#71717A] hover:bg-[#27272A] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <Bell size={19} />
+          <LogOut size={16} />
+          <span>
+            {signingOut ? 'Saindo...' : 'Sair'}
+          </span>
         </button>
-      </div>
+      )}
     </header>
   )
 }

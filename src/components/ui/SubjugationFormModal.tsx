@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react'
 import {
   X,
@@ -11,9 +12,10 @@ import type {
   SubjugationFormData,
   CreatureDiscoveryStatus,
 } from '../../types/subjugation'
+
 interface SubjugationFormModalProps {
   initialData?: Subjugation
-  onSave: (data: SubjugationFormData) => void
+  onSave: (data: SubjugationFormData) => Promise<void> | void
   onClose: () => void
 }
 
@@ -73,10 +75,12 @@ export default function SubjugationFormModal({
   )
 
   const [imageError, setImageError] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !saving) {
         onClose()
       }
     }
@@ -86,7 +90,7 @@ export default function SubjugationFormModal({
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [onClose])
+  }, [onClose, saving])
 
   function updateField<K extends keyof SubjugationFormData>(
     field: K,
@@ -96,10 +100,18 @@ export default function SubjugationFormModal({
       ...previous,
       [field]: value,
     }))
+
+    if (saveError) {
+      setSaveError('')
+    }
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault()
+
+    if (saving) return
 
     const cleanedData: SubjugationFormData = {
       ...formData,
@@ -111,7 +123,20 @@ export default function SubjugationFormModal({
       subjugatedDate: formData.subjugatedDate?.trim() || '',
     }
 
-    onSave(cleanedData)
+    setSaving(true)
+    setSaveError('')
+
+    try {
+      await onSave(cleanedData)
+    } catch (error) {
+      console.error('Erro ao salvar criatura:', error)
+
+      setSaveError(
+        'Não foi possível salvar a criatura. Verifique sua conexão e tente novamente.',
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   const isSubjugated = formData.discoveryStatus === 'Subjugada'
@@ -120,7 +145,9 @@ export default function SubjugationFormModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={() => {
+        if (!saving) onClose()
+      }}
     >
       <div
         className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[#151515] shadow-2xl"
@@ -141,7 +168,8 @@ export default function SubjugationFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-gray-500 transition hover:bg-white/5 hover:text-white"
+            disabled={saving}
+            className="rounded-lg p-2 text-gray-500 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Fechar formulário"
           >
             <X className="h-5 w-5" />
@@ -160,6 +188,7 @@ export default function SubjugationFormModal({
                 <button
                   key={option.value}
                   type="button"
+                  disabled={saving}
                   onClick={() =>
                     updateField('discoveryStatus', option.value)
                   }
@@ -167,7 +196,7 @@ export default function SubjugationFormModal({
                     formData.discoveryStatus === option.value
                       ? 'border-purple-500/60 bg-purple-500/10'
                       : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
-                  }`}
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   <div className="flex items-center gap-3">
                     <span
@@ -208,12 +237,13 @@ export default function SubjugationFormModal({
                 <input
                   required
                   type="text"
+                  disabled={saving}
                   value={formData.name}
                   onChange={(event) =>
                     updateField('name', event.target.value)
                   }
                   placeholder="Ex.: Vrock"
-                  className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50"
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50 disabled:opacity-50"
                 />
               </div>
 
@@ -225,12 +255,13 @@ export default function SubjugationFormModal({
                 <input
                   required
                   type="text"
+                  disabled={saving}
                   value={formData.challengeRating}
                   onChange={(event) =>
                     updateField('challengeRating', event.target.value)
                   }
                   placeholder="Ex.: 6 ou 1/2"
-                  className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50"
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50 disabled:opacity-50"
                 />
               </div>
             </div>
@@ -242,12 +273,13 @@ export default function SubjugationFormModal({
 
               <textarea
                 rows={4}
+                disabled={saving}
                 value={formData.description}
                 onChange={(event) =>
                   updateField('description', event.target.value)
                 }
                 placeholder="Descreva a criatura..."
-                className="w-full resize-y rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50"
+                className="w-full resize-y rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50 disabled:opacity-50"
               />
             </div>
           </section>
@@ -267,13 +299,14 @@ export default function SubjugationFormModal({
 
               <input
                 type="url"
+                disabled={saving}
                 value={formData.imageUrl}
                 onChange={(event) => {
                   updateField('imageUrl', event.target.value)
                   setImageError(false)
                 }}
                 placeholder="https://..."
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50"
+                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50 disabled:opacity-50"
               />
             </div>
 
@@ -291,11 +324,7 @@ export default function SubjugationFormModal({
                 />
               ) : (
                 <div className="flex flex-col items-center gap-2 text-gray-600">
-                  {imageError ? (
-                    <ImageIcon className="h-8 w-8" />
-                  ) : (
-                    <ImageIcon className="h-8 w-8" />
-                  )}
+                  <ImageIcon className="h-8 w-8" />
 
                   <span className="text-xs">
                     {imageError
@@ -327,12 +356,13 @@ export default function SubjugationFormModal({
 
               <input
                 type="url"
+                disabled={saving}
                 value={formData.externalUrl ?? ''}
                 onChange={(event) =>
                   updateField('externalUrl', event.target.value)
                 }
                 placeholder="https://..."
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50"
+                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50 disabled:opacity-50"
               />
 
               <p className="text-xs text-gray-500">
@@ -368,12 +398,13 @@ export default function SubjugationFormModal({
 
                     <input
                       type="text"
+                      disabled={saving}
                       value={formData.subjugatedDate ?? ''}
                       onChange={(event) =>
                         updateField('subjugatedDate', event.target.value)
                       }
                       placeholder="Ex.: 12/11/2026"
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50"
+                      className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50 disabled:opacity-50"
                     />
                   </div>
 
@@ -386,6 +417,7 @@ export default function SubjugationFormModal({
                       type="number"
                       min="1"
                       max="20"
+                      disabled={saving}
                       value={formData.dhaliaLevel ?? ''}
                       onChange={(event) =>
                         updateField(
@@ -396,7 +428,7 @@ export default function SubjugationFormModal({
                         )
                       }
                       placeholder="Ex.: 10"
-                      className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50"
+                      className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-purple-500/50 disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -409,24 +441,26 @@ export default function SubjugationFormModal({
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
+                      disabled={saving}
                       onClick={() => updateField('isAlive', true)}
                       className={`rounded-lg border p-3 text-sm transition ${
                         formData.isAlive
                           ? 'border-green-500/40 bg-green-500/10 text-green-300'
                           : 'border-white/10 text-gray-400 hover:bg-white/5'
-                      }`}
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
                     >
                       Vivo
                     </button>
 
                     <button
                       type="button"
+                      disabled={saving}
                       onClick={() => updateField('isAlive', false)}
                       className={`rounded-lg border p-3 text-sm transition ${
                         !formData.isAlive
                           ? 'border-red-500/40 bg-red-500/10 text-red-300'
                           : 'border-white/10 text-gray-400 hover:bg-white/5'
-                      }`}
+                      } disabled:cursor-not-allowed disabled:opacity-50`}
                     >
                       Morto
                     </button>
@@ -445,21 +479,34 @@ export default function SubjugationFormModal({
           </section>
 
           {/* Rodapé */}
-          <div className="flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-end">
+            {saveError && (
+              <p className="text-xs text-red-400 sm:mr-auto">
+                {saveError}
+              </p>
+            )}
+
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-white/10 px-5 py-3 text-sm text-gray-300 transition hover:bg-white/5"
+              disabled={saving}
+              className="rounded-lg border border-white/10 px-5 py-3 text-sm text-gray-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancelar
             </button>
 
             <button
               type="submit"
-              className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+              disabled={saving}
+              className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
-              {initialData ? 'Salvar alterações' : 'Criar criatura'}
+
+              {saving
+                ? 'Salvando...'
+                : initialData
+                  ? 'Salvar alterações'
+                  : 'Criar criatura'}
             </button>
           </div>
         </form>

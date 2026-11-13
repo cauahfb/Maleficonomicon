@@ -16,8 +16,12 @@ import {
 } from 'lucide-react'
 
 import EssenceFormModal from '../components/ui/EssenceFormModal'
-import { getEssences, saveEssences } from '../lib/essenceStorage'
-import { getContracts, saveContracts } from '../lib/contractStorage'
+import {
+  getEssences,
+  saveEssences,
+  deleteEssence,
+} from '../lib/essenceStorage'
+import { getContracts, saveContract } from '../lib/contractStorage'
 import { addAuditLog } from '../lib/auditLogStorage'
 
 import type {
@@ -27,71 +31,6 @@ import type {
   EssenceStatus,
 } from '../types/essence'
 import type { AuditLogFormData } from '../types/auditLog'
-
-// ============================================================
-// DADOS INICIAIS DE DEMONSTRAÇÃO
-// ============================================================
-
-const demoEssences: Essence[] = [
-  {
-    id: 'demo-001',
-    name: 'Vrock',
-    titles: ['Demônio Corvo', 'Arauto da Destruição'],
-    nature: 'Demônio',
-    trueNamePublic: false,
-    hasIndividualTalisman: false,
-    hierarchy: 'Tanar’ri',
-    status: 'Subjugado',
-    registrationDate: '12/11/2026',
-    createdAt: 4,
-    description:
-      'Uma criatura demoníaca de aparência aviária, conhecida por sua brutalidade e pelo som aterrador de seus gritos.',
-  },
-  {
-    id: 'demo-002',
-    name: 'Imp',
-    titles: ['Pequeno Tentador'],
-    trueName: 'Quasithel',
-    trueNamePublic: false,
-    nature: 'Diabo',
-    hasIndividualTalisman: false,
-    hierarchy: 'Nono escalão infernal',
-    status: 'Contratado',
-    registrationDate: '10/11/2026',
-    createdAt: 3,
-    description:
-      'Um pequeno diabo astuto, especializado em espionagem, manipulação e pactos de pouca importância aparente.',
-  },
-  {
-    id: 'demo-003',
-    name: 'Barlgura',
-    titles: ['O Bruto Abissal'],
-    nature: 'Demônio',
-    trueNamePublic: false,
-    hasIndividualTalisman: false,
-    hierarchy: 'Tanar’ri',
-    status: 'Registrado',
-    registrationDate: '08/11/2026',
-    createdAt: 2,
-    description:
-      'Um demônio de força extraordinária, cuja natureza selvagem o torna uma ameaça devastadora em combate.',
-  },
-  {
-    id: 'demo-004',
-    name: 'Erinyes',
-    titles: ['A Executora Infernal'],
-    trueName: 'Astrael',
-    trueNamePublic: false,
-    nature: 'Diabo',
-    hasIndividualTalisman: false,
-    hierarchy: 'Nona Casa dos Infernos',
-    status: 'Erradicado',
-    registrationDate: '05/11/2026',
-    createdAt: 1,
-    description:
-      'Uma entidade infernal de grande disciplina, associada à punição e à execução das vontades de seus superiores.',
-  },
-]
 
 // ============================================================
 // ESTILOS E CONFIGURAÇÕES
@@ -114,14 +53,11 @@ const natureStyles: Record<EssenceNature, string> = {
 // ============================================================
 
 export default function Essences() {
-  const [essences, setEssences] = useState<Essence[]>(() => {
-    const savedEssences = getEssences()
-    return savedEssences ?? demoEssences
-  })
-
-  useEffect(() => {
-    saveEssences(essences)
-  }, [essences])
+  const [essences, setEssences] = useState<Essence[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [operationError, setOperationError] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const [search, setSearch] = useState('')
   const [natureFilter, setNatureFilter] = useState('Todas')
@@ -138,12 +74,49 @@ export default function Essences() {
     useState<Essence | null>(null)
 
   // ==========================================================
+  // CARREGAMENTO DO SUPABASE
+  // ==========================================================
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadEssences() {
+      try {
+        const data = await getEssences()
+
+        if (mounted) {
+          setEssences(data)
+          setLoadError('')
+        }
+      } catch (error) {
+        console.error('Erro ao carregar essências:', error)
+
+        if (mounted) {
+          setLoadError(
+            'Não foi possível carregar as essências do Supabase.',
+          )
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void loadEssences()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // ==========================================================
   // HISTÓRICO ADMINISTRATIVO
   // ==========================================================
 
-  function recordAudit(data: AuditLogFormData) {
+  async function recordAudit(data: AuditLogFormData): Promise<void> {
     try {
-      addAuditLog(data)
+      await addAuditLog(data)
     } catch (error) {
       console.error(
         'Não foi possível registrar a atividade no histórico:',
@@ -243,61 +216,78 @@ export default function Essences() {
   // CRIAR E EDITAR
   // ==========================================================
 
-  function handleSave(data: EssenceFormData) {
-    if (editingEssence) {
-      const updatedEssence: Essence = {
-        ...editingEssence,
-        ...data,
-      }
+  async function handleSave(data: EssenceFormData) {
+    if (saving || loading || loadError) return
 
-      recordAudit({
-        action: 'Editado',
+    const savedEssence: Essence = editingEssence
+      ? {
+          ...editingEssence,
+          ...data,
+        }
+      : {
+          ...data,
+          id: crypto.randomUUID(),
+          createdAt: Date.now(),
+        }
+
+    setSaving(true)
+    setOperationError('')
+
+    try {
+      // Primeiro salva no Supabase.
+      await saveEssences([savedEssence])
+
+      // Registra a atividade administrativa.
+      await recordAudit({
+        action: editingEssence ? 'Editado' : 'Criado',
         entityType: 'Essência',
-        entityId: editingEssence.id,
-        entityName: updatedEssence.name,
-        description: `A essência ${updatedEssence.name} foi editada.`,
-        oldData: editingEssence,
-        newData: updatedEssence,
+        entityId: savedEssence.id,
+        entityName: savedEssence.name,
+        description: editingEssence
+          ? `A essência ${savedEssence.name} foi editada.`
+          : `A essência ${savedEssence.name} foi registrada no Maleficonomicon.`,
+        ...(editingEssence
+          ? {
+              oldData: editingEssence,
+              newData: savedEssence,
+            }
+          : {
+              newData: savedEssence,
+            }),
       })
 
+      // Atualiza a interface somente após salvar no banco.
       setEssences((current) =>
-        current.map((essence) =>
-          essence.id === editingEssence.id
-            ? updatedEssence
-            : essence,
-        ),
+        editingEssence
+          ? current.map((essence) =>
+              essence.id === savedEssence.id
+                ? savedEssence
+                : essence,
+            )
+          : [savedEssence, ...current],
       )
 
-    } else {
-      const newEssence: Essence = {
-        ...data,
-        id: crypto.randomUUID(),
-        createdAt: Date.now(),
-      }
-
-      recordAudit({
-        action: 'Criado',
-        entityType: 'Essência',
-        entityId: newEssence.id,
-        entityName: newEssence.name,
-        description: `A essência ${newEssence.name} foi registrada no Maleficonomicon.`,
-        newData: newEssence,
-      })
-
-      setEssences((current) => [newEssence, ...current])
+      setFormOpen(false)
+      setEditingEssence(null)
+    } catch (error) {
+      console.error('Erro ao salvar essência:', error)
+      setOperationError('Não foi possível salvar a essência.')
+    } finally {
+      setSaving(false)
     }
-
-    setFormOpen(false)
-    setEditingEssence(null)
   }
 
   function handleNewEssence() {
+    if (loading || loadError || saving) return
+
     setSelectedEssence(null)
     setEditingEssence(null)
     setFormOpen(true)
   }
 
   function handleEdit(essence: Essence) {
+    if (loading || loadError || saving) return
+
     setSelectedEssence(null)
     setEditingEssence(essence)
     setFormOpen(true)
@@ -307,8 +297,15 @@ export default function Essences() {
   // EXCLUSÃO
   // ==========================================================
 
-  function handleDelete(essence: Essence) {
-    const contracts = getContracts() ?? []
+  async function handleDelete(essence: Essence) {
+  if (saving || loading || loadError) return
+
+  setSaving(true)
+  setOperationError('')
+
+  try {
+    // Busca os contratos diretamente no Supabase.
+    const contracts = await getContracts()
 
     const associatedContracts = contracts.filter(
       (contract) => contract.essenceId === essence.id,
@@ -334,41 +331,45 @@ export default function Essences() {
 
     if (!confirmed) return
 
-    // Desvincular contratos, preservando seus dados históricos.
+    // Desvincula os contratos antes de excluir a essência.
     if (associatedContracts.length > 0) {
       const now = Date.now()
 
-      const updatedContracts = contracts.map((contract) => {
-        if (contract.essenceId !== essence.id) {
-          return contract
-        }
+      const updatedContracts = associatedContracts.map((contract) => ({
+        ...contract,
+        essenceId: null,
+        contractorName: contract.contractorName || essence.name,
+        updatedAt: now,
+      }))
 
-        const updatedContract = {
-          ...contract,
-          essenceId: null,
-          contractorName: contract.contractorName || essence.name,
-          updatedAt: now,
-        }
+      // Persiste as alterações no Supabase.
+      await Promise.all(
+        updatedContracts.map((contract) => saveContract(contract)),
+      )
 
-        recordAudit({
-          action: 'Editado',
-          entityType: 'Contrato',
-          entityId: contract.id,
-          entityName: contract.name,
-          description:
-            `O contrato ${contract.name} foi desvinculado da essência ${essence.name}, que foi excluída do registro.`,
-          oldData: contract,
-          newData: updatedContract,
-        })
+      // Registra as alterações no histórico administrativo.
+      await Promise.all(
+        associatedContracts.map((contract, index) => {
+          const updatedContract = updatedContracts[index]
 
-        return updatedContract
-      })
-
-      saveContracts(updatedContracts)
+          return recordAudit({
+            action: 'Editado',
+            entityType: 'Contrato',
+            entityId: contract.id,
+            entityName: contract.name,
+            description:
+              `O contrato ${contract.name} foi desvinculado da essência ${essence.name}, que foi excluída do registro.`,
+            oldData: contract,
+            newData: updatedContract,
+          })
+        }),
+      )
     }
 
-    // Registrar a exclusão da essência.
-    recordAudit({
+    // Exclui a essência somente depois de desvincular os contratos.
+    await deleteEssence(essence.id)
+
+    await recordAudit({
       action: 'Excluído',
       entityType: 'Essência',
       entityId: essence.id,
@@ -382,8 +383,15 @@ export default function Essences() {
     )
 
     setSelectedEssence(null)
+  } catch (error) {
+    console.error('Erro ao excluir essência:', error)
+    setOperationError(
+      'Não foi possível excluir a essência ou desvincular seus contratos.',
+    )
+  } finally {
+    setSaving(false)
   }
-
+}
   // ==========================================================
   // FECHAR MODAL DE DETALHES COM ESC
   // ==========================================================
@@ -443,12 +451,35 @@ export default function Essences() {
 
         <button
           onClick={handleNewEssence}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700"
+          disabled={loading || Boolean(loadError) || saving}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={18} />
           Nova Essência
         </button>
       </div>
+
+      {/* CARREGAMENTO E ERROS */}
+
+      {loading && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-6 text-center">
+          <p className="text-sm text-zinc-400">
+            Carregando essências...
+          </p>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-4">
+          <p className="text-sm text-red-400">{loadError}</p>
+        </div>
+      )}
+
+      {operationError && (
+        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-4">
+          <p className="text-sm text-red-400">{operationError}</p>
+        </div>
+      )}
 
       {/* CONTADORES */}
 
@@ -821,7 +852,7 @@ export default function Essences() {
 
       {/* ESTADO VAZIO */}
 
-      {filteredEssences.length === 0 && (
+      {!loading && !loadError && filteredEssences.length === 0 && (
         <div className="rounded-xl border border-dashed border-zinc-800 px-6 py-16 text-center">
           <Search
             size={30}
@@ -910,6 +941,7 @@ export default function Essences() {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {/* NOME VERDADEIRO */}
+
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
                   <p className="text-xs uppercase tracking-wider text-zinc-600">
                     Nome verdadeiro
@@ -929,6 +961,7 @@ export default function Essences() {
                 </div>
 
                 {/* HIERARQUIA */}
+
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
                   <p className="text-xs uppercase tracking-wider text-zinc-600">
                     Hierarquia
@@ -940,6 +973,7 @@ export default function Essences() {
                 </div>
 
                 {/* TALISMÃ INDIVIDUAL */}
+
                 {selectedEssence.nature === 'Diabo' && (
                   <div className="rounded-lg border border-red-900/30 bg-red-950/10 p-4 sm:col-span-2">
                     <div className="flex items-center gap-2">
@@ -960,6 +994,7 @@ export default function Essences() {
                 )}
 
                 {/* DATA DE REGISTRO */}
+
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 sm:col-span-2">
                   <p className="text-xs uppercase tracking-wider text-zinc-600">
                     Data de registro
@@ -986,7 +1021,8 @@ export default function Essences() {
               <div className="flex flex-col-reverse justify-between gap-3 border-t border-zinc-800 pt-5 sm:flex-row">
                 <button
                   onClick={() => handleDelete(selectedEssence)}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-900/50 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/40"
+                  disabled={saving}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-900/50 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Trash2 size={16} />
                   Excluir registro
@@ -994,7 +1030,8 @@ export default function Essences() {
 
                 <button
                   onClick={() => handleEdit(selectedEssence)}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-700"
+                  disabled={saving}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Pencil size={16} />
                   Editar registro
@@ -1013,6 +1050,8 @@ export default function Essences() {
           initialData={editingEssence ?? undefined}
           onSave={handleSave}
           onClose={() => {
+            if (saving) return
+
             setFormOpen(false)
             setEditingEssence(null)
           }}

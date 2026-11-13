@@ -1,5 +1,5 @@
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ScrollText,
   Skull,
@@ -15,8 +15,9 @@ import {
 import { getEssences } from '../lib/essenceStorage'
 import { getContracts } from '../lib/contractStorage'
 import { getSubjugations } from '../lib/subjugationStorage'
-import { getAuditLogs } from '../lib/auditLogStorage'
+import { supabase } from '../lib/supabase'
 import type { AuditLog } from '../types/auditLog'
+import type { Essence } from '../types/essence'
 import {
   getDahliaLevel,
   saveDahliaLevel,
@@ -29,6 +30,15 @@ interface DashboardStats {
   activeContracts: number
   subjugated: number
   deadSubjugated: number
+}
+
+const emptyStats: DashboardStats = {
+  demons: 0,
+  devils: 0,
+  totalContracts: 0,
+  activeContracts: 0,
+  subjugated: 0,
+  deadSubjugated: 0,
 }
 
 const contractMilestones = [
@@ -51,48 +61,6 @@ function getContractLimits(level: number | null) {
   return milestone
     ? { maximum: milestone.maximum, active: milestone.active }
     : { maximum: 0, active: 0 }
-}
-
-function loadDashboardData() {
-  const essences = getEssences() ?? []
-  const contracts = getContracts() ?? []
-  const subjugations = getSubjugations() ?? []
-
-  // Oculta edições genéricas da atividade pública.
-  // Os registros continuam preservados no histórico administrativo.
-  const recentActivities = getAuditLogs()
-    .filter((log) => log.action !== 'Editado')
-    .slice(0, 8)
-
-  return {
-    stats: {
-      demons: essences.filter(
-        (item) => item.nature === 'Demônio',
-      ).length,
-
-      devils: essences.filter(
-        (item) => item.nature === 'Diabo',
-      ).length,
-
-      totalContracts: contracts.length,
-
-      activeContracts: contracts.filter(
-        (item) => item.status === 'Ativo',
-      ).length,
-
-      subjugated: subjugations.filter(
-        (item) => item.discoveryStatus === 'Subjugada',
-      ).length,
-
-      deadSubjugated: subjugations.filter(
-        (item) =>
-          item.discoveryStatus === 'Subjugada' && !item.isAlive,
-      ).length,
-    },
-
-    level: getDahliaLevel(),
-    recentActivities,
-  }
 }
 
 function formatActivityDate(timestamp: number) {
@@ -123,27 +91,167 @@ function getActivityColor(action: AuditLog['action']) {
 }
 
 export default function Dashboard() {
-  const [initialData] = useState(loadDashboardData)
+  const [stats, setStats] = useState<DashboardStats>(emptyStats)
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [statsError, setStatsError] = useState('')
 
-  const [stats] = useState<DashboardStats>(initialData.stats)
+  const [recentActivities, setRecentActivities] = useState<AuditLog[]>([])
+  const [activitiesLoading, setActivitiesLoading] = useState(true)
+  const [activitiesError, setActivitiesError] = useState('')
 
-  const [recentActivities] = useState<AuditLog[]>(
-    initialData.recentActivities,
-  )
-
-  const [savedLevel, setSavedLevel] = useState<number | null>(
-    initialData.level,
-  )
-
-  const [levelInput, setLevelInput] = useState(
-    initialData.level?.toString() ?? '',
-  )
-
+  const [savedLevel, setSavedLevel] = useState<number | null>(null)
+  const [levelInput, setLevelInput] = useState('')
+  const [levelLoading, setLevelLoading] = useState(true)
+  const [levelSaving, setLevelSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  useEffect(() => {
+    let mounted = true
+
+    async function loadDahliaLevel() {
+      try {
+        const level = await getDahliaLevel()
+
+        if (!mounted) return
+
+        setSavedLevel(level)
+        setLevelInput(level?.toString() ?? '')
+      } catch (error) {
+        console.error('Erro ao carregar nível da Dhalia:', error)
+        if (mounted) {
+          setSaveError('Não foi possível carregar o nível da Dhalia.')
+        }
+      } finally {
+        if (mounted) {
+          setLevelLoading(false)
+        }
+      }
+    }
+
+    void loadDahliaLevel()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // ==========================================================
+  // CARREGAMENTO DOS INDICADORES
+  // ==========================================================
+
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadDashboardData() {
+      try {
+        const [essences, contracts, subjugations] = await Promise.all([
+          getEssences(),
+          getContracts(),
+          getSubjugations(),
+        ])
+
+        if (!mounted) return
+
+        setStats({
+          demons: essences.filter(
+            (item: Essence) => item.nature === 'Demônio',
+          ).length,
+
+          devils: essences.filter(
+            (item: Essence) => item.nature === 'Diabo',
+          ).length,
+
+          totalContracts: contracts.length,
+
+          activeContracts: contracts.filter(
+            (item) => item.status === 'Ativo',
+          ).length,
+
+          subjugated: subjugations.filter(
+            (item) => item.discoveryStatus === 'Subjugada',
+          ).length,
+
+          deadSubjugated: subjugations.filter(
+            (item) =>
+              item.discoveryStatus === 'Subjugada' && !item.isAlive,
+          ).length,
+        })
+
+        setStatsError('')
+      } catch (error) {
+        console.error('Erro ao carregar indicadores:', error)
+
+        if (mounted) {
+          setStatsError('Não foi possível carregar os indicadores.')
+        }
+      } finally {
+        if (mounted) {
+          setStatsLoading(false)
+        }
+      }
+    }
+
+    void loadDashboardData()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+
+  // ==========================================================
+  // CARREGAMENTO DAS ATIVIDADES RECENTES
+  // ==========================================================
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadRecentActivities() {
+      const { data, error } = await supabase
+        .from('public_recent_activities')
+        .select('id, action, entity_type, entity_name, description, created_at')
+        .neq('action', 'Editado')
+        .order('created_at', { ascending: false })
+        .limit(3)
+
+      if (!mounted) return
+
+      if (error) {
+        console.error('Erro ao carregar atividades recentes:', error)
+        setActivitiesError('Não foi possível carregar as atividades recentes.')
+      } else {
+        const activities: AuditLog[] = (data ?? []).map((log) => ({
+          id: log.id,
+          action: log.action as AuditLog['action'],
+          entityType: log.entity_type as AuditLog['entityType'],
+          entityId: '',
+          entityName: log.entity_name,
+          description: log.description,
+          createdAt: new Date(log.created_at).getTime(),
+        }))
+
+        setRecentActivities(activities)
+        setActivitiesError('')
+      }
+
+      setActivitiesLoading(false)
+    }
+
+    void loadRecentActivities()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+  
   const limits = getContractLimits(savedLevel)
 
-  const handleSaveLevel = () => {
+  // ==========================================================
+  // SALVAR NÍVEL
+  // ==========================================================
+
+  const handleSaveLevel = async () => {
     const level = Number(levelInput)
 
     if (
@@ -156,14 +264,23 @@ export default function Dashboard() {
       return
     }
 
+    setLevelSaving(true)
+
     try {
-      saveDahliaLevel(level)
+      await saveDahliaLevel(level)
       setSavedLevel(level)
       setSaveError('')
-    } catch {
+    } catch (error) {
+      console.error('Erro ao salvar nível da Dhalia:', error)
       setSaveError('Não foi possível salvar o nível.')
+    } finally {
+      setLevelSaving(false)
     }
   }
+
+  // ==========================================================
+  // INDICADORES
+  // ==========================================================
 
   const indicators = [
     {
@@ -247,6 +364,10 @@ export default function Dashboard() {
           </span>
         </div>
 
+        {statsError && (
+          <p className="mb-4 text-xs text-red-400">{statsError}</p>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {indicators.map((item) => {
             const Icon = item.icon
@@ -255,11 +376,10 @@ export default function Dashboard() {
             return (
               <div
                 key={item.label}
-                className={`rounded-lg border p-5 transition ${
-                  isPurple
-                    ? 'border-[#49266B] bg-[#17101F] hover:border-[#9333EA]'
-                    : 'border-[#632329] bg-[#1F1012] hover:border-[#DC2626]'
-                }`}
+                className={`rounded-lg border p-5 transition ${isPurple
+                  ? 'border-[#49266B] bg-[#17101F] hover:border-[#9333EA]'
+                  : 'border-[#632329] bg-[#1F1012] hover:border-[#DC2626]'
+                  }`}
               >
                 <div className="mb-5 flex items-center justify-between">
                   <p className="text-xs text-[#D4D4D8]">
@@ -275,7 +395,7 @@ export default function Dashboard() {
                 </div>
 
                 <p className="font-serif text-3xl text-white">
-                  {item.value}
+                  {statsLoading ? '—' : item.value}
                 </p>
 
                 <p className="mt-2 text-xs text-[#A1A1AA]">
@@ -358,16 +478,22 @@ export default function Dashboard() {
                 value={levelInput}
                 onChange={(event) => setLevelInput(event.target.value)}
                 placeholder="Ex.: 10"
+                disabled={levelLoading || levelSaving}
                 className="w-full rounded border border-[#3F3F46] bg-[#09090B] px-3 py-2 text-sm text-white outline-none transition focus:border-[#9333EA]"
               />
 
               <button
                 type="button"
                 onClick={handleSaveLevel}
-                className="flex shrink-0 items-center gap-2 rounded border border-[#632329] bg-[#351418] px-4 py-2 text-xs text-white transition hover:border-[#DC2626] hover:bg-[#4A1B20]"
+                disabled={levelLoading || levelSaving}
+                className="flex shrink-0 items-center gap-2 rounded border border-[#632329] bg-[#351418] px-4 py-2 text-xs text-white transition hover:border-[#DC2626] hover:bg-[#4A1B20] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Save size={15} />
-                Salvar
+                {levelLoading
+                  ? 'Carregando...'
+                  : levelSaving
+                    ? 'Salvando...'
+                    : 'Salvar'}
               </button>
             </div>
 
@@ -400,7 +526,17 @@ export default function Dashboard() {
             </h3>
           </div>
 
-          {recentActivities.length === 0 ? (
+          {activitiesLoading ? (
+            <div className="flex min-h-24 items-center justify-center text-center">
+              <p className="text-sm text-[#A1A1AA]">
+                Carregando atividades...
+              </p>
+            </div>
+          ) : activitiesError ? (
+            <div className="flex min-h-24 items-center justify-center text-center">
+              <p className="text-xs text-red-400">{activitiesError}</p>
+            </div>
+          ) : recentActivities.length === 0 ? (
             <div className="flex min-h-24 flex-col items-center justify-center text-center">
               <ScrollText size={24} className="mb-3 text-[#52525B]" />
 

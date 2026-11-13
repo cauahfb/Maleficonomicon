@@ -1,5 +1,5 @@
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ScrollText,
   Search,
@@ -17,6 +17,9 @@ import type {
   AuditAction,
   AuditEntityType,
 } from '../types/auditLog'
+
+const LOGS_PER_PAGE = 10
+const MAX_PAGES = 3
 
 const entityTypes: AuditEntityType[] = [
   'Essência',
@@ -100,14 +103,50 @@ function DataPanel({
 }
 
 export default function AuditHistory() {
-  const [logs] = useState<AuditLog[]>(() =>
-    getAuditLogs().sort((a, b) => b.createdAt - a.createdAt),
-  )
+  const [logs, setLogs] = useState<AuditLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   const [search, setSearch] = useState('')
   const [selectedEntity, setSelectedEntity] = useState('')
   const [selectedAction, setSelectedAction] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadLogs() {
+      try {
+        const data = await getAuditLogs()
+
+        if (mounted) {
+          setLogs(
+            data.sort((a, b) => b.createdAt - a.createdAt),
+          )
+          setLoadError('')
+        }
+      } catch (error) {
+        console.error('Erro ao carregar histórico:', error)
+
+        if (mounted) {
+          setLoadError(
+            'Não foi possível carregar o histórico administrativo.',
+          )
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void loadLogs()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const filteredLogs = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR')
@@ -128,17 +167,36 @@ export default function AuditHistory() {
     })
   }, [logs, search, selectedEntity, selectedAction])
 
+  const hasFilters =
+    search.trim() !== '' ||
+    selectedEntity !== '' ||
+    selectedAction !== ''
+
+  const totalPages = Math.min(
+    MAX_PAGES,
+    Math.max(1, Math.ceil(filteredLogs.length / LOGS_PER_PAGE)),
+  )
+
+  const safePage = hasFilters
+    ? 1
+    : Math.min(currentPage, totalPages)
+
+  const paginatedLogs = useMemo(() => {
+    const startIndex = (safePage - 1) * LOGS_PER_PAGE
+
+    return filteredLogs.slice(
+      startIndex,
+      startIndex + LOGS_PER_PAGE,
+    )
+  }, [filteredLogs, safePage])
+
   const clearFilters = () => {
     setSearch('')
     setSelectedEntity('')
     setSelectedAction('')
     setExpandedId(null)
+    setCurrentPage(1)
   }
-
-  const hasFilters =
-    search !== '' ||
-    selectedEntity !== '' ||
-    selectedAction !== ''
 
   return (
     <>
@@ -222,7 +280,11 @@ export default function AuditHistory() {
                 id="audit-search"
                 type="text"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value)
+                  setCurrentPage(1)
+                  setExpandedId(null)
+                }}
                 placeholder="Nome ou descrição..."
                 className="w-full rounded border border-[#3F3F46] bg-[#09090B] py-2.5 pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-[#52525B] focus:border-[#9333EA]"
               />
@@ -240,7 +302,11 @@ export default function AuditHistory() {
             <select
               id="audit-entity"
               value={selectedEntity}
-              onChange={(event) => setSelectedEntity(event.target.value)}
+              onChange={(event) => {
+                setSelectedEntity(event.target.value)
+                setCurrentPage(1)
+                setExpandedId(null)
+              }}
               className="w-full rounded border border-[#3F3F46] bg-[#09090B] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#9333EA]"
             >
               <option value="">Todas as categorias</option>
@@ -264,7 +330,11 @@ export default function AuditHistory() {
             <select
               id="audit-action"
               value={selectedAction}
-              onChange={(event) => setSelectedAction(event.target.value)}
+              onChange={(event) => {
+                setSelectedAction(event.target.value)
+                setCurrentPage(1)
+                setExpandedId(null)
+              }}
               className="w-full rounded border border-[#3F3F46] bg-[#09090B] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#9333EA]"
             >
               <option value="">Todas as ações</option>
@@ -304,7 +374,17 @@ export default function AuditHistory() {
           </span>
         </div>
 
-        {filteredLogs.length === 0 ? (
+        {loading ? (
+          <div className="flex min-h-64 items-center justify-center rounded-lg border border-[#3F3F46] bg-[#18181B]">
+            <p className="text-sm text-[#A1A1AA]">
+              Carregando histórico...
+            </p>
+          </div>
+        ) : loadError ? (
+          <div className="flex min-h-64 items-center justify-center rounded-lg border border-[#632329] bg-[#1F1012] p-6 text-center">
+            <p className="text-sm text-red-300">{loadError}</p>
+          </div>
+        ) : filteredLogs.length === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-[#3F3F46] bg-[#18181B] px-6 text-center">
             <ScrollText size={30} className="mb-4 text-[#52525B]" />
 
@@ -329,95 +409,167 @@ export default function AuditHistory() {
             )}
           </div>
         ) : (
-          <div className="space-y-3">
-            {filteredLogs.map((log) => {
-              const isExpanded = expandedId === log.id
+          <>
+            <div className="space-y-3">
+              {paginatedLogs.map((log) => {
+                const isExpanded = expandedId === log.id
 
-              return (
-                <article
-                  key={log.id}
-                  className="overflow-hidden rounded-lg border border-[#3F3F46] bg-[#18181B] transition hover:border-[#52525B]"
-                >
+                return (
+                  <article
+                    key={log.id}
+                    className="overflow-hidden rounded-lg border border-[#3F3F46] bg-[#18181B] transition hover:border-[#52525B]"
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedId(isExpanded ? null : log.id)
+                      }
+                      aria-expanded={isExpanded}
+                      className="flex w-full items-start gap-4 p-5 text-left"
+                    >
+                      <div className="mt-1 shrink-0">
+                        <ScrollText
+                          size={19}
+                          className="text-[#A1A1AA]"
+                        />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${getActionColor(log.action)}`}
+                          >
+                            {log.action}
+                          </span>
+
+                          <span className="text-[10px] uppercase tracking-wider text-[#71717A]">
+                            {log.entityType}
+                          </span>
+                        </div>
+
+                        <h3 className="truncate text-sm font-medium text-[#F4F4F5]">
+                          {log.entityName}
+                        </h3>
+
+                        <p className="mt-1 text-xs leading-5 text-[#A1A1AA]">
+                          {log.description}
+                        </p>
+
+                        <div className="mt-3 flex items-center gap-2 text-[10px] text-[#71717A]">
+                          <Clock size={12} />
+                          <span>{formatDate(log.createdAt)}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-1 shrink-0 text-[#71717A]">
+                        {isExpanded ? (
+                          <ChevronUp size={18} />
+                        ) : (
+                          <ChevronDown size={18} />
+                        )}
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="border-t border-[#3F3F46] bg-[#111113] p-5">
+                        <div className="mb-4">
+                          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
+                            Identificação do registro
+                          </h4>
+
+                          <p className="break-all font-mono text-[10px] text-[#71717A]">
+                            {log.id}
+                          </p>
+                        </div>
+
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <DataPanel
+                            title="Dados anteriores"
+                            data={log.oldData}
+                          />
+
+                          <DataPanel
+                            title="Dados posteriores"
+                            data={log.newData}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
+
+            {/* Paginação */}
+            {filteredLogs.length > LOGS_PER_PAGE && (
+              <div className="mt-8 flex flex-col items-center justify-between gap-4 border-t border-[#3F3F46] pt-6 sm:flex-row">
+                <p className="text-xs text-[#71717A]">
+                  Exibindo{' '}
+                  {(safePage - 1) * LOGS_PER_PAGE + 1}
+                  {' '}–{' '}
+                  {Math.min(
+                    safePage * LOGS_PER_PAGE,
+                    filteredLogs.length,
+                  )}
+                  {' '}de {filteredLogs.length} registros
+                </p>
+
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() =>
-                      setExpandedId(isExpanded ? null : log.id)
-                    }
-                    aria-expanded={isExpanded}
-                    className="flex w-full items-start gap-4 p-5 text-left"
+                    onClick={() => {
+                      setCurrentPage((page) =>
+                        Math.max(1, page - 1),
+                      )
+                      setExpandedId(null)
+                    }}
+                    disabled={safePage === 1}
+                    className="rounded border border-[#3F3F46] px-3 py-2 text-xs text-[#A1A1AA] transition hover:border-[#71717A] hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
                   >
-                    <div className="mt-1 shrink-0">
-                      <ScrollText
-                        size={19}
-                        className="text-[#A1A1AA]"
-                      />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <span
-                          className={`rounded border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${getActionColor(log.action)}`}
-                        >
-                          {log.action}
-                        </span>
-
-                        <span className="text-[10px] uppercase tracking-wider text-[#71717A]">
-                          {log.entityType}
-                        </span>
-                      </div>
-
-                      <h3 className="truncate text-sm font-medium text-[#F4F4F5]">
-                        {log.entityName}
-                      </h3>
-
-                      <p className="mt-1 text-xs leading-5 text-[#A1A1AA]">
-                        {log.description}
-                      </p>
-
-                      <div className="mt-3 flex items-center gap-2 text-[10px] text-[#71717A]">
-                        <Clock size={12} />
-                        <span>{formatDate(log.createdAt)}</span>
-                      </div>
-                    </div>
-
-                    <div className="mt-1 shrink-0 text-[#71717A]">
-                      {isExpanded ? (
-                        <ChevronUp size={18} />
-                      ) : (
-                        <ChevronDown size={18} />
-                      )}
-                    </div>
+                    Anterior
                   </button>
 
-                  {isExpanded && (
-                    <div className="border-t border-[#3F3F46] bg-[#111113] p-5">
-                      <div className="mb-4">
-                        <h4 className="mb-1 text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
-                          Identificação do registro
-                        </h4>
+                  {Array.from(
+                    { length: totalPages },
+                    (_, index) => index + 1,
+                  ).map((page) => (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => {
+                        setCurrentPage(page)
+                        setExpandedId(null)
+                      }}
+                      aria-current={
+                        safePage === page ? 'page' : undefined
+                      }
+                      className={`h-9 w-9 rounded border text-xs transition ${
+                        safePage === page
+                          ? 'border-[#71717A] bg-[#27272A] text-white'
+                          : 'border-[#3F3F46] text-[#A1A1AA] hover:border-[#71717A] hover:text-white'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
 
-                        <p className="break-all font-mono text-[10px] text-[#71717A]">
-                          {log.id}
-                        </p>
-                      </div>
-
-                      <div className="grid gap-4 lg:grid-cols-2">
-                        <DataPanel
-                          title="Dados anteriores"
-                          data={log.oldData}
-                        />
-
-                        <DataPanel
-                          title="Dados posteriores"
-                          data={log.newData}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </article>
-              )
-            })}
-          </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentPage((page) =>
+                        Math.min(totalPages, page + 1),
+                      )
+                      setExpandedId(null)
+                    }}
+                    disabled={safePage === totalPages}
+                    className="rounded border border-[#3F3F46] px-3 py-2 text-xs text-[#A1A1AA] transition hover:border-[#71717A] hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </section>
     </>

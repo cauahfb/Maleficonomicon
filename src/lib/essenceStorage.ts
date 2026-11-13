@@ -1,7 +1,23 @@
 
+import { supabase } from './supabase'
 import type { Essence } from '../types/essence'
 
-const STORAGE_KEY = 'maleficonomicon_essences'
+interface EssenceDatabase {
+  id: string
+  name: string
+  titles: string[]
+  true_name: string | null
+  true_name_public: boolean
+  nature: Essence['nature']
+  has_individual_talisman: boolean
+  individual_talisman: string | null
+  hierarchy: string
+  status: Essence['status']
+  image_url: string | null
+  registration_date: string | null
+  created_at: string
+  description: string
+}
 
 function normalizeEssence(data: Partial<Essence>): Essence {
   const nature = data.nature === 'Diabo' ? 'Diabo' : 'Demônio'
@@ -29,44 +45,106 @@ function normalizeEssence(data: Partial<Essence>): Essence {
   }
 }
 
-export function getEssences(): Essence[] | null {
-  try {
-    const storedData = localStorage.getItem(STORAGE_KEY)
+function mapDatabaseEssence(row: EssenceDatabase): Essence {
+  return normalizeEssence({
+    id: row.id,
+    name: row.name,
+    titles: row.titles,
+    trueName: row.true_name ?? undefined,
+    trueNamePublic: row.true_name_public,
+    nature: row.nature,
+    hasIndividualTalisman: row.has_individual_talisman,
+    individualTalisman: row.individual_talisman ?? undefined,
+    hierarchy: row.hierarchy,
+    status: row.status,
+    imageUrl: row.image_url ?? undefined,
+    registrationDate: row.registration_date ?? '',
+    createdAt: new Date(row.created_at).getTime(),
+    description: row.description,
+  })
+}
 
-    // null significa que ainda não existe uma biblioteca salva.
-    if (storedData === null) {
-      return null
-    }
+function toDatabaseDate(value: string): string | null {
+  if (!value.trim()) return null
 
-    const parsedData: unknown = JSON.parse(storedData)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value
+  }
 
-    if (!Array.isArray(parsedData)) {
-      return null
-    }
+  const brazilianDate = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
 
-    return parsedData.map((item) =>
-      normalizeEssence(item as Partial<Essence>),
-    )
-  } catch (error) {
-    console.error('Erro ao carregar essências:', error)
-    return null
+  if (brazilianDate) {
+    const [, day, month, year] = brazilianDate
+    return `${year}-${month}-${day}`
+  }
+
+  throw new Error(`Data de registro inválida: ${value}`)
+}
+
+function mapEssenceToDatabase(essence: Essence) {
+  const normalized = normalizeEssence(essence)
+
+  return {
+    id: normalized.id,
+    name: normalized.name,
+    titles: normalized.titles,
+    true_name: normalized.trueName ?? null,
+    true_name_public: normalized.trueNamePublic,
+    nature: normalized.nature,
+    has_individual_talisman: normalized.hasIndividualTalisman,
+    individual_talisman: normalized.individualTalisman ?? null,
+    hierarchy: normalized.hierarchy,
+    status: normalized.status,
+    image_url: normalized.imageUrl ?? null,
+    registration_date: toDatabaseDate(normalized.registrationDate),
+    created_at: new Date(normalized.createdAt).toISOString(),
+    description: normalized.description,
   }
 }
 
-export function saveEssences(essences: Essence[]): void {
-  try {
-    const normalizedEssences = essences.map(normalizeEssence)
+export async function getEssences(): Promise<Essence[]> {
+  const { data, error } = await supabase
+    .from('essences')
+    .select('*')
+    .order('created_at', { ascending: false })
 
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(normalizedEssences),
-    )
-  } catch (error) {
+  if (error) {
+    console.error('Erro ao carregar essências:', error)
+    throw new Error('Não foi possível carregar as essências.', {
+      cause: error,
+    })
+  }
+
+  return (data as EssenceDatabase[]).map(mapDatabaseEssence)
+}
+
+export async function saveEssences(essences: Essence[]): Promise<void> {
+  if (essences.length === 0) return
+
+  const rows = essences.map(mapEssenceToDatabase)
+
+  const { error } = await supabase
+    .from('essences')
+    .upsert(rows, { onConflict: 'id' })
+
+  if (error) {
     console.error('Erro ao salvar essências:', error)
+    throw new Error('Não foi possível salvar as essências no Supabase.', {
+      cause: error,
+    })
+  }
+}
 
-    throw new Error(
-      'Não foi possível salvar as essências no navegador.',
-      { cause: error },
-    )
+export async function deleteEssence(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('essences')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Erro ao excluir essência:', error)
+    throw new Error('Não foi possível excluir a essência do Supabase.', {
+      cause: error,
+    })
   }
 }

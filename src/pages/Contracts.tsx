@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react'
 import {
   Search,
@@ -25,7 +24,11 @@ import type {
 
 import type { Essence } from '../types/essence'
 
-import { getContracts, saveContracts } from '../lib/contractStorage'
+import {
+  getContracts,
+  saveContract,
+  deleteContract,
+} from '../lib/contractStorage'
 import { getEssences } from '../lib/essenceStorage'
 import { addAuditLog } from '../lib/auditLogStorage'
 import type { AuditLogFormData } from '../types/auditLog'
@@ -40,67 +43,6 @@ import {
 } from '../lib/contractRules'
 
 // ============================================================
-// DADOS INICIAIS DE DEMONSTRAÇÃO
-// ============================================================
-
-const demoContracts: Contract[] = [
-  {
-    id: 'contract-demo-001',
-    name: 'Pacto da Visão Profana',
-    essenceId: null,
-    contractorName: 'Astrael',
-    description:
-      'Um acordo firmado com uma entidade dos Nove Infernos, oferecendo ao contratante a capacidade de enxergar aquilo que normalmente permanece oculto.',
-    offer:
-      'O contratante recebe a capacidade de perceber criaturas invisíveis e enxergar através de determinadas formas de escuridão.',
-    price:
-      'Uma memória querida será entregue ao contratante infernal, que poderá guardá-la como parte de seu tesouro.',
-    clauses:
-      'A visão concedida não pode ser utilizada para contemplar diretamente o verdadeiro nome do contratante.',
-    status: 'Ativo',
-    signedDate: '12/11/2026',
-    createdAt: 3,
-    updatedAt: 3,
-  },
-  {
-    id: 'contract-demo-002',
-    name: 'A Dívida de Sangue',
-    essenceId: null,
-    contractorName: 'Malphas',
-    description:
-      'Um contrato de natureza infernal que transforma o sofrimento físico em uma fonte temporária de poder.',
-    offer:
-      'O contratante recebe uma reserva adicional de energia infernal, capaz de fortalecer seus ataques.',
-    price:
-      'Uma quantidade de sangue deverá ser oferecida ao contratante sempre que o poder for utilizado.',
-    clauses:
-      'O benefício não poderá ser utilizado mais de uma vez antes de um descanso longo.',
-    status: 'Inativo',
-    signedDate: '10/11/2026',
-    createdAt: 2,
-    updatedAt: 2,
-  },
-  {
-    id: 'contract-demo-003',
-    name: 'O Sussurro dos Condenados',
-    essenceId: null,
-    contractorName: 'Belzareth',
-    description:
-      'Um acordo obscuro que permite ao contratante ouvir fragmentos de conversas e segredos carregados pelas almas condenadas.',
-    offer:
-      'O contratante pode receber informações sussurradas por espíritos e entidades inferiores.',
-    price:
-      'A cada utilização, uma pequena parte da própria voz será temporariamente oferecida ao diabo.',
-    clauses:
-      'As informações recebidas podem ser incompletas, distorcidas ou deliberadamente enganosas.',
-    status: 'Ativo',
-    signedDate: '08/11/2026',
-    createdAt: 1,
-    updatedAt: 1,
-  },
-]
-
-// ============================================================
 // ESTILOS
 // ============================================================
 
@@ -113,9 +55,9 @@ const statusStyles: Record<ContractStatus, string> = {
 // HISTÓRICO ADMINISTRATIVO
 // ============================================================
 
-function recordAudit(data: AuditLogFormData) {
+async function recordAudit(data: AuditLogFormData): Promise<void> {
   try {
-    addAuditLog(data)
+    await addAuditLog(data)
   } catch (error) {
     console.error(
       'Não foi possível registrar a atividade administrativa:',
@@ -129,18 +71,90 @@ function recordAudit(data: AuditLogFormData) {
 // ============================================================
 
 export default function Contracts() {
-  const [contracts, setContracts] = useState<Contract[]>(() => {
-    const savedContracts = getContracts()
-    return savedContracts ?? demoContracts
-  })
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [contractsLoading, setContractsLoading] = useState(true)
+  const [contractsError, setContractsError] = useState('')
 
-  const [essences] = useState<Essence[]>(() => {
-    return getEssences() ?? []
-  })
+  const [essences, setEssences] = useState<Essence[]>([])
+  const [essencesLoading, setEssencesLoading] = useState(true)
+  const [essencesError, setEssencesError] = useState('')
 
-  const [dahliaLevel] = useState<number | null>(() => {
-    return getDahliaLevel()
-  })
+const [dahliaLevel, setDahliaLevel] = useState<number | null>(null)
+
+useEffect(() => {
+  let mounted = true
+
+  async function loadDahliaLevel() {
+    try {
+      const level = await getDahliaLevel()
+
+      if (mounted) {
+        setDahliaLevel(level)
+      }
+    } catch (error) {
+      console.error('Erro ao carregar nível da Dhalia:', error)
+    }
+  }
+
+  void loadDahliaLevel()
+
+  return () => {
+    mounted = false
+  }
+}, [])
+  // ==========================================================
+  // CARREGAMENTO DOS DADOS
+  // ==========================================================
+
+  useEffect(() => {
+    let mounted = true
+
+    async function loadData() {
+      try {
+        const [contractsData, essencesData] = await Promise.all([
+          getContracts(),
+          getEssences(),
+        ])
+
+        if (!mounted) return
+
+        // Impede que registros antigos de demonstração apareçam
+        // como contratos reais da biblioteca.
+        setContracts(
+          contractsData.filter(
+            (contract) => !contract.id.startsWith('contract-demo-'),
+          ),
+        )
+
+        setEssences(essencesData)
+        setContractsError('')
+        setEssencesError('')
+      } catch (error) {
+        console.error('Erro ao carregar a biblioteca de contratos:', error)
+
+        if (mounted) {
+          setContractsError(
+            'Não foi possível carregar os contratos do Supabase. Atualize a página ou tente novamente.',
+          )
+
+          setEssencesError(
+            'Não foi possível carregar as essências do Supabase.',
+          )
+        }
+      } finally {
+        if (mounted) {
+          setContractsLoading(false)
+          setEssencesLoading(false)
+        }
+      }
+    }
+
+    void loadData()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const contractLimits = getContractLimits(dahliaLevel)
 
@@ -162,18 +176,20 @@ export default function Contracts() {
     useState<Contract | null>(null)
 
   // ==========================================================
-  // PERSISTÊNCIA
-  // ==========================================================
-
-  useEffect(() => {
-    saveContracts(contracts)
-  }, [contracts])
-
-  // ==========================================================
   // CRIAÇÃO E EDIÇÃO
   // ==========================================================
 
-  function handleSave(data: ContractFormData) {
+  async function handleSave(data: ContractFormData) {
+    if (
+      contractsLoading ||
+      essencesLoading ||
+      contractsError ||
+      essencesError
+    ) {
+      window.alert('Aguarde o carregamento dos dados antes de continuar.')
+      return
+    }
+
     const validationError = validateContractSave({
       contracts,
       essences,
@@ -189,59 +205,89 @@ export default function Contracts() {
 
     const now = Date.now()
 
-    if (editingContract) {
-      const updatedContract: Contract = {
-        ...editingContract,
-        ...data,
-        updatedAt: now,
+    try {
+      if (editingContract) {
+        const updatedContract: Contract = {
+          ...editingContract,
+          ...data,
+          updatedAt: now,
+        }
+
+        const savedContract = await saveContract(updatedContract)
+
+        await recordAudit({
+          action: 'Editado',
+          entityType: 'Contrato',
+          entityId: savedContract.id,
+          entityName: savedContract.name,
+          description: `O contrato "${savedContract.name}" foi editado.`,
+          oldData: editingContract,
+          newData: savedContract,
+        })
+
+        setContracts((current) =>
+          current.map((contract) =>
+            contract.id === savedContract.id ? savedContract : contract,
+          ),
+        )
+      } else {
+        const newContract: Contract = {
+          ...data,
+          id: crypto.randomUUID(),
+          createdAt: now,
+          updatedAt: now,
+        }
+
+        const savedContract = await saveContract(newContract)
+
+        await recordAudit({
+          action: 'Criado',
+          entityType: 'Contrato',
+          entityId: savedContract.id,
+          entityName: savedContract.name,
+          description: `O contrato "${savedContract.name}" foi criado.`,
+          newData: savedContract,
+        })
+
+        setContracts((current) => [savedContract, ...current])
       }
 
-      recordAudit({
-        action: 'Editado',
-        entityType: 'Contrato',
-        entityId: updatedContract.id,
-        entityName: updatedContract.name,
-        description: `O contrato "${updatedContract.name}" foi editado.`,
-        oldData: editingContract,
-        newData: updatedContract,
-      })
+      setFormOpen(false)
+      setEditingContract(null)
+      setSelectedContract(null)
+    } catch (error) {
+      console.error('Erro ao salvar contrato:', error)
 
-      setContracts((current) =>
-        current.map((contract) =>
-          contract.id === editingContract.id ? updatedContract : contract,
-        ),
+      window.alert(
+        'Não foi possível salvar o contrato no banco de dados. Nenhuma alteração foi aplicada à lista.',
       )
-    } else {
-      const newContract: Contract = {
-        ...data,
-        id: crypto.randomUUID(),
-        createdAt: now,
-        updatedAt: now,
-      }
-
-      recordAudit({
-        action: 'Criado',
-        entityType: 'Contrato',
-        entityId: newContract.id,
-        entityName: newContract.name,
-        description: `O contrato "${newContract.name}" foi criado.`,
-        newData: newContract,
-      })
-
-      setContracts((current) => [newContract, ...current])
     }
-
-    setFormOpen(false)
-    setEditingContract(null)
-    setSelectedContract(null)
   }
 
   function handleNewContract() {
+    if (
+      contractsLoading ||
+      essencesLoading ||
+      contractsError ||
+      essencesError
+    ) {
+      return
+    }
+
     setEditingContract(null)
     setFormOpen(true)
   }
 
   function handleEdit(contract: Contract) {
+    if (
+      contractsLoading ||
+      essencesLoading ||
+      contractsError ||
+      essencesError
+    ) {
+      return
+    }
+
     setSelectedContract(null)
     setEditingContract(contract)
     setFormOpen(true)
@@ -251,34 +297,52 @@ export default function Contracts() {
   // EXCLUSÃO
   // ==========================================================
 
-  function handleDelete(contract: Contract) {
+  async function handleDelete(contract: Contract) {
     const confirmed = window.confirm(
       `Tem certeza de que deseja excluir o contrato "${contract.name}"?\n\nEssa ação removerá o registro da biblioteca.`,
     )
 
     if (!confirmed) return
 
-    recordAudit({
-      action: 'Excluído',
-      entityType: 'Contrato',
-      entityId: contract.id,
-      entityName: contract.name,
-      description: `O contrato "${contract.name}" foi excluído.`,
-      oldData: contract,
-    })
+    try {
+      await deleteContract(contract.id)
 
-    setContracts((current) =>
-      current.filter((item) => item.id !== contract.id),
-    )
+      await recordAudit({
+        action: 'Excluído',
+        entityType: 'Contrato',
+        entityId: contract.id,
+        entityName: contract.name,
+        description: `O contrato "${contract.name}" foi excluído.`,
+        oldData: contract,
+      })
 
-    setSelectedContract(null)
+      setContracts((current) =>
+        current.filter((item) => item.id !== contract.id),
+      )
+
+      setSelectedContract(null)
+    } catch (error) {
+      console.error('Erro ao excluir contrato:', error)
+
+      window.alert('Não foi possível excluir o contrato no banco de dados.')
+    }
   }
 
   // ==========================================================
   // ATIVAÇÃO E DESATIVAÇÃO
   // ==========================================================
 
-  function handleToggleStatus(contract: Contract) {
+  async function handleToggleStatus(contract: Contract) {
+    if (
+      contractsLoading ||
+      essencesLoading ||
+      contractsError ||
+      essencesError
+    ) {
+      window.alert('Aguarde o carregamento dos dados antes de continuar.')
+      return
+    }
+
     const nextStatus: ContractStatus =
       contract.status === 'Ativo' ? 'Inativo' : 'Ativo'
 
@@ -296,8 +360,7 @@ export default function Contracts() {
       }
     }
 
-    const action =
-      nextStatus === 'Ativo' ? 'ativar' : 'desativar'
+    const action = nextStatus === 'Ativo' ? 'ativar' : 'desativar'
 
     const confirmed = window.confirm(
       `Deseja realmente ${action} o contrato "${contract.name}"?`,
@@ -305,35 +368,43 @@ export default function Contracts() {
 
     if (!confirmed) return
 
-    const now = Date.now()
-
     const updatedContract: Contract = {
       ...contract,
       status: nextStatus,
-      updatedAt: now,
+      updatedAt: Date.now(),
     }
 
-    recordAudit({
-      action: nextStatus === 'Ativo' ? 'Ativado' : 'Desativado',
-      entityType: 'Contrato',
-      entityId: contract.id,
-      entityName: contract.name,
-      description: `O contrato "${contract.name}" foi ${
-        nextStatus === 'Ativo' ? 'ativado' : 'desativado'
-      }.`,
-      oldData: contract,
-      newData: updatedContract,
-    })
+    try {
+      const savedContract = await saveContract(updatedContract)
 
-    setContracts((current) =>
-      current.map((item) =>
-        item.id === contract.id ? updatedContract : item,
-      ),
-    )
+      await recordAudit({
+        action: nextStatus === 'Ativo' ? 'Ativado' : 'Desativado',
+        entityType: 'Contrato',
+        entityId: savedContract.id,
+        entityName: savedContract.name,
+        description: `O contrato "${savedContract.name}" foi ${
+          nextStatus === 'Ativo' ? 'ativado' : 'desativado'
+        }.`,
+        oldData: contract,
+        newData: savedContract,
+      })
 
-    setSelectedContract((current) =>
-      current?.id === contract.id ? updatedContract : current,
-    )
+      setContracts((current) =>
+        current.map((item) =>
+          item.id === savedContract.id ? savedContract : item,
+        ),
+      )
+
+      setSelectedContract((current) =>
+        current?.id === savedContract.id ? savedContract : current,
+      )
+    } catch (error) {
+      console.error('Erro ao alterar estado do contrato:', error)
+
+      window.alert(
+        'Não foi possível alterar o estado do contrato no banco de dados.',
+      )
+    }
   }
 
   // ==========================================================
@@ -469,12 +540,52 @@ export default function Contracts() {
 
         <button
           onClick={handleNewContract}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700"
+          disabled={
+            contractsLoading ||
+            essencesLoading ||
+            Boolean(contractsError) ||
+            Boolean(essencesError)
+          }
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={18} />
           Novo Contrato
         </button>
       </div>
+
+      {/* CARREGAMENTO E ERROS */}
+
+      {contractsLoading && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+          <p className="text-sm text-zinc-400">
+            Carregando contratos da biblioteca...
+          </p>
+        </div>
+      )}
+
+      {contractsError && (
+        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-4">
+          <p className="text-sm text-red-400">
+            {contractsError}
+          </p>
+        </div>
+      )}
+
+      {essencesLoading && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+          <p className="text-sm text-zinc-400">
+            Carregando essências disponíveis...
+          </p>
+        </div>
+      )}
+
+      {essencesError && (
+        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-4">
+          <p className="text-sm text-red-400">
+            {essencesError}
+          </p>
+        </div>
+      )}
 
       {/* INDICADORES */}
 
@@ -535,6 +646,7 @@ export default function Contracts() {
         </div>
 
       </div>
+
       {(exceededSignedLimit || exceededActiveLimit) && (
         <div className="flex items-start gap-3 rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
           <CircleX size={20} className="mt-0.5 shrink-0 text-amber-500" />
@@ -556,6 +668,7 @@ export default function Contracts() {
           </div>
         </div>
       )}
+
       {/* PESQUISA E FILTROS */}
 
       <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
@@ -873,31 +986,33 @@ export default function Contracts() {
 
       {/* ESTADO VAZIO */}
 
-      {filteredContracts.length === 0 && (
-        <div className="rounded-xl border border-dashed border-zinc-800 px-6 py-16 text-center">
+      {!contractsLoading &&
+        !contractsError &&
+        filteredContracts.length === 0 && (
+          <div className="rounded-xl border border-dashed border-zinc-800 px-6 py-16 text-center">
 
-          <ScrollText
-            size={30}
-            className="mx-auto text-zinc-700"
-          />
+            <ScrollText
+              size={30}
+              className="mx-auto text-zinc-700"
+            />
 
-          <h3 className="mt-4 font-medium text-zinc-300">
-            Nenhum contrato encontrado
-          </h3>
+            <h3 className="mt-4 font-medium text-zinc-300">
+              Nenhum contrato encontrado
+            </h3>
 
-          <p className="mt-2 text-sm text-zinc-500">
-            Tente alterar os filtros ou os termos da pesquisa.
-          </p>
+            <p className="mt-2 text-sm text-zinc-500">
+              Tente alterar os filtros ou os termos da pesquisa.
+            </p>
 
-          <button
-            onClick={clearFilters}
-            className="mt-4 text-sm text-red-400 hover:text-red-300"
-          >
-            Limpar filtros
-          </button>
+            <button
+              onClick={clearFilters}
+              className="mt-4 text-sm text-red-400 hover:text-red-300"
+            >
+              Limpar filtros
+            </button>
 
-        </div>
-      )}
+          </div>
+        )}
 
       {/* MODAL DE DETALHES */}
 
