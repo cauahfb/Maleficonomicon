@@ -7,8 +7,8 @@ import {
   Skull,
   Flame,
   CalendarDays,
-  UserRoundCheck,
   Eye,
+  KeyRound,
   Pencil,
   Trash2,
   X,
@@ -17,6 +17,8 @@ import {
 
 import EssenceFormModal from '../components/ui/EssenceFormModal'
 import { getEssences, saveEssences } from '../lib/essenceStorage'
+import { getContracts, saveContracts } from '../lib/contractStorage'
+import { addAuditLog } from '../lib/auditLogStorage'
 
 import type {
   Essence,
@@ -24,19 +26,7 @@ import type {
   EssenceNature,
   EssenceStatus,
 } from '../types/essence'
-
-import {
-  addAuditLog,
-} from '../lib/auditLogStorage'
-
-import type {
-  AuditLogFormData,
-} from '../types/auditLog'
-
-import {
-  getContracts,
-  saveContracts,
-} from '../lib/contractStorage'
+import type { AuditLogFormData } from '../types/auditLog'
 
 // ============================================================
 // DADOS INICIAIS DE DEMONSTRAÇÃO
@@ -48,6 +38,8 @@ const demoEssences: Essence[] = [
     name: 'Vrock',
     titles: ['Demônio Corvo', 'Arauto da Destruição'],
     nature: 'Demônio',
+    trueNamePublic: false,
+    hasIndividualTalisman: false,
     hierarchy: 'Tanar’ri',
     status: 'Subjugado',
     registrationDate: '12/11/2026',
@@ -60,7 +52,9 @@ const demoEssences: Essence[] = [
     name: 'Imp',
     titles: ['Pequeno Tentador'],
     trueName: 'Quasithel',
+    trueNamePublic: false,
     nature: 'Diabo',
+    hasIndividualTalisman: false,
     hierarchy: 'Nono escalão infernal',
     status: 'Contratado',
     registrationDate: '10/11/2026',
@@ -73,6 +67,8 @@ const demoEssences: Essence[] = [
     name: 'Barlgura',
     titles: ['O Bruto Abissal'],
     nature: 'Demônio',
+    trueNamePublic: false,
+    hasIndividualTalisman: false,
     hierarchy: 'Tanar’ri',
     status: 'Registrado',
     registrationDate: '08/11/2026',
@@ -85,7 +81,9 @@ const demoEssences: Essence[] = [
     name: 'Erinyes',
     titles: ['A Executora Infernal'],
     trueName: 'Astrael',
+    trueNamePublic: false,
     nature: 'Diabo',
+    hasIndividualTalisman: false,
     hierarchy: 'Nona Casa dos Infernos',
     status: 'Erradicado',
     registrationDate: '05/11/2026',
@@ -118,9 +116,9 @@ const natureStyles: Record<EssenceNature, string> = {
 export default function Essences() {
   const [essences, setEssences] = useState<Essence[]>(() => {
     const savedEssences = getEssences()
-
     return savedEssences ?? demoEssences
   })
+
   useEffect(() => {
     saveEssences(essences)
   }, [essences])
@@ -138,13 +136,22 @@ export default function Essences() {
   const [formOpen, setFormOpen] = useState(false)
   const [editingEssence, setEditingEssence] =
     useState<Essence | null>(null)
+
+  // ==========================================================
+  // HISTÓRICO ADMINISTRATIVO
+  // ==========================================================
+
   function recordAudit(data: AuditLogFormData) {
     try {
       addAuditLog(data)
     } catch (error) {
-      console.error('Não foi possível registrar a atividade:', error)
+      console.error(
+        'Não foi possível registrar a atividade no histórico:',
+        error,
+      )
     }
   }
+
   // ==========================================================
   // FILTRAGEM E ORDENAÇÃO
   // ==========================================================
@@ -159,6 +166,7 @@ export default function Essences() {
         const searchableContent = [
           essence.name,
           essence.trueName ?? '',
+          essence.individualTalisman ?? '',
           essence.hierarchy,
           essence.description,
           ...essence.titles,
@@ -259,6 +267,7 @@ export default function Essences() {
             : essence,
         ),
       )
+
     } else {
       const newEssence: Essence = {
         ...data,
@@ -280,10 +289,10 @@ export default function Essences() {
 
     setFormOpen(false)
     setEditingEssence(null)
-    setSelectedEssence(null)
   }
 
   function handleNewEssence() {
+    setSelectedEssence(null)
     setEditingEssence(null)
     setFormOpen(true)
   }
@@ -495,7 +504,7 @@ export default function Essences() {
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Pesquisar por nome, título, epíteto ou nome verdadeiro..."
+              placeholder="Pesquisar por nome, título, epíteto, nome verdadeiro ou talismã..."
               className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-3 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-red-800"
             />
           </div>
@@ -680,14 +689,15 @@ export default function Essences() {
                   </span>
                 </td>
 
-                <td className="px-5 py-4 text-sm text-zinc-400">
-                  {essence.trueName ? (
-                    <span className="inline-flex items-center gap-2 text-emerald-400">
-                      <UserRoundCheck size={15} />
-                      Sim
+                <td className="px-5 py-4 text-sm">
+                  {essence.trueNamePublic && essence.trueName?.trim() ? (
+                    <span className="text-emerald-400">
+                      {essence.trueName}
                     </span>
                   ) : (
-                    <span className="text-zinc-600">Não</span>
+                    <span className="font-medium tracking-wide text-zinc-500">
+                      OCULTO
+                    </span>
                   )}
                 </td>
 
@@ -758,6 +768,26 @@ export default function Essences() {
                 <CalendarDays size={14} />
                 {essence.registrationDate || 'Data não informada'}
               </div>
+
+              <div
+                className={`mt-2 text-xs ${
+                  essence.trueNamePublic && essence.trueName?.trim()
+                    ? 'text-emerald-400'
+                    : 'font-medium tracking-wide text-zinc-500'
+                }`}
+              >
+                Nome verdadeiro:{' '}
+                {essence.trueNamePublic && essence.trueName?.trim()
+                  ? essence.trueName
+                  : 'OCULTO'}
+              </div>
+
+              {essence.nature === 'Diabo' && essence.hasIndividualTalisman && (
+                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-red-400">
+                  <KeyRound size={12} />
+                  Possui talismã individual
+                </div>
+              )}
             </button>
 
             <div className="mt-4 flex justify-end gap-2 border-t border-zinc-800 pt-3">
@@ -879,16 +909,26 @@ export default function Essences() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* NOME VERDADEIRO */}
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
                   <p className="text-xs uppercase tracking-wider text-zinc-600">
                     Nome verdadeiro
                   </p>
 
-                  <p className="mt-2 text-sm text-zinc-200">
-                    {selectedEssence.trueName || 'Desconhecido'}
+                  <p
+                    className={`mt-2 text-sm ${
+                      selectedEssence.trueNamePublic && selectedEssence.trueName?.trim()
+                        ? 'text-emerald-400'
+                        : 'font-medium tracking-wide text-zinc-500'
+                    }`}
+                  >
+                    {selectedEssence.trueNamePublic && selectedEssence.trueName?.trim()
+                      ? selectedEssence.trueName
+                      : 'OCULTO'}
                   </p>
                 </div>
 
+                {/* HIERARQUIA */}
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
                   <p className="text-xs uppercase tracking-wider text-zinc-600">
                     Hierarquia
@@ -899,6 +939,27 @@ export default function Essences() {
                   </p>
                 </div>
 
+                {/* TALISMÃ INDIVIDUAL */}
+                {selectedEssence.nature === 'Diabo' && (
+                  <div className="rounded-lg border border-red-900/30 bg-red-950/10 p-4 sm:col-span-2">
+                    <div className="flex items-center gap-2">
+                      <KeyRound size={14} className="text-red-400" />
+
+                      <p className="text-xs uppercase tracking-wider text-zinc-500">
+                        Talismã individual
+                      </p>
+                    </div>
+
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-200">
+                      {selectedEssence.hasIndividualTalisman
+                        ? selectedEssence.individualTalisman ||
+                          'Talismã marcado, mas sem descrição.'
+                        : 'Este diabo não possui talismã individual registrado.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* DATA DE REGISTRO */}
                 <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 sm:col-span-2">
                   <p className="text-xs uppercase tracking-wider text-zinc-600">
                     Data de registro

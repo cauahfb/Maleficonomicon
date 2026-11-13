@@ -27,24 +27,43 @@ export default function EssenceFormModal({
   const [name, setName] = useState(initialData?.name ?? '')
   const [titles, setTitles] = useState(initialData?.titles.join(', ') ?? '')
   const [trueName, setTrueName] = useState(initialData?.trueName ?? '')
+
+  const [trueNamePublic, setTrueNamePublic] = useState(
+    initialData?.trueNamePublic ?? false,
+  )
+
+  const [hasIndividualTalisman, setHasIndividualTalisman] = useState(
+    initialData?.hasIndividualTalisman ?? false,
+  )
+
+  const [individualTalisman, setIndividualTalisman] = useState(
+    initialData?.individualTalisman ?? '',
+  )
+
   const [nature, setNature] = useState<EssenceNature>(
     initialData?.nature ?? 'Demônio',
   )
+
   const [hierarchy, setHierarchy] = useState(
     initialData?.hierarchy ?? '',
   )
+
   const [status, setStatus] = useState<EssenceStatus>(
     initialData?.status ?? 'Registrado',
   )
+
   const [imageUrl, setImageUrl] = useState(
     initialData?.imageUrl ?? '',
   )
+
   const [registrationDate, setRegistrationDate] = useState(
     initialData?.registrationDate ?? '',
   )
+
   const [description, setDescription] = useState(
     initialData?.description ?? '',
   )
+
   const [imageError, setImageError] = useState(false)
 
   useEffect(() => {
@@ -60,14 +79,32 @@ export default function EssenceFormModal({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
+    const trimmedTrueName = trueName.trim()
+
+    if (!trimmedTrueName) {
+      return
+    }
+
     onSave({
       name: name.trim(),
       titles: titles
         .split(',')
         .map((title) => title.trim())
         .filter(Boolean),
-      trueName: trueName.trim() || undefined,
+
+      trueName: trimmedTrueName,
+      trueNamePublic: trueNamePublic,
+
       nature,
+
+      hasIndividualTalisman:
+        nature === 'Diabo' && hasIndividualTalisman,
+
+      individualTalisman:
+        nature === 'Diabo' && hasIndividualTalisman
+          ? individualTalisman.trim() || undefined
+          : undefined,
+
       hierarchy: hierarchy.trim(),
       status,
       imageUrl: imageUrl.trim() || undefined,
@@ -147,17 +184,62 @@ export default function EssenceFormModal({
               </p>
             </div>
 
+            {/* NOME VERDADEIRO */}
             <div>
               <label className={labelClass}>
-                Nome verdadeiro
+                Nome verdadeiro *
               </label>
 
               <input
+                required
+                pattern=".*\S.*"
+                title="Informe o nome verdadeiro da entidade."
                 value={trueName}
-                onChange={(event) => setTrueName(event.target.value)}
-                placeholder="Nome verdadeiro, se conhecido"
+                onChange={(event) => {
+                  setTrueName(event.target.value)
+
+                  if (!event.target.value.trim()) {
+                    setTrueNamePublic(false)
+                  }
+                }}
+                placeholder="Informe o nome verdadeiro da entidade"
                 className={inputClass}
               />
+
+              <p className="mt-2 text-[11px] text-[#71717A]">
+                Este campo é obrigatório. Caso o nome não seja revelado,
+                os jogadores verão apenas OCULTO.
+              </p>
+
+              <label
+                className={`mt-3 flex items-start gap-3 rounded-md border p-3 transition ${
+                  trueNamePublic && trueName.trim()
+                    ? 'border-emerald-900/70 bg-emerald-950/20'
+                    : 'border-[#3F3F46] bg-[#09090B]'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={trueNamePublic}
+                  disabled={!trueName.trim()}
+                  onChange={(event) =>
+                    setTrueNamePublic(event.target.checked)
+                  }
+                  className="mt-0.5 h-4 w-4 accent-emerald-600 disabled:cursor-not-allowed"
+                />
+
+                <span>
+                  <span className="block text-xs text-[#E4E4E7]">
+                    Revelar nome verdadeiro aos jogadores
+                  </span>
+
+                  <span className="mt-1 block text-[11px] leading-5 text-[#71717A]">
+                    {trueName.trim()
+                      ? 'Quando marcado, o nome verdadeiro ficará visível na consulta pública desta essência.'
+                      : 'Informe um nome verdadeiro para habilitar a revelação.'}
+                  </span>
+                </span>
+              </label>
             </div>
 
             {/* NATUREZA */}
@@ -167,7 +249,11 @@ export default function EssenceFormModal({
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setNature('Demônio')}
+                  onClick={() => {
+                    setNature('Demônio')
+                    setHasIndividualTalisman(false)
+                    setIndividualTalisman('')
+                  }}
                   className={`flex items-center justify-center gap-2 rounded-md border px-3 py-3 text-sm transition ${
                     nature === 'Demônio'
                       ? 'border-[#9333EA] bg-[#24103B] text-[#D8B4FE]'
@@ -192,6 +278,69 @@ export default function EssenceFormModal({
                 </button>
               </div>
             </div>
+
+            {/* TALISMÃ INDIVIDUAL DOS DIABOS */}
+            {nature === 'Diabo' && (
+              <div className="space-y-3 rounded-lg border border-[#632329]/70 bg-[#1F1012]/60 p-4">
+                <div>
+                  <p className="text-sm font-medium text-[#F4F4F5]">
+                    Talismã individual
+                  </p>
+
+                  <p className="mt-1 text-[11px] leading-5 text-[#A1A1AA]">
+                    Registre se este diabo possui um talismã próprio.
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHasIndividualTalisman(true)}
+                    className={`flex-1 rounded-md border px-3 py-2.5 text-sm transition ${
+                      hasIndividualTalisman
+                        ? 'border-[#DC2626] bg-[#350D12] text-[#FCA5A5]'
+                        : 'border-[#3F3F46] bg-[#09090B] text-[#A1A1AA]'
+                    }`}
+                  >
+                    Sim
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHasIndividualTalisman(false)
+                      setIndividualTalisman('')
+                    }}
+                    className={`flex-1 rounded-md border px-3 py-2.5 text-sm transition ${
+                      !hasIndividualTalisman
+                        ? 'border-[#52525B] bg-[#27272A] text-white'
+                        : 'border-[#3F3F46] bg-[#09090B] text-[#A1A1AA]'
+                    }`}
+                  >
+                    Não
+                  </button>
+                </div>
+
+                {hasIndividualTalisman && (
+                  <div>
+                    <label className={labelClass}>
+                      Qual é o talismã? *
+                    </label>
+
+                    <textarea
+                      required
+                      value={individualTalisman}
+                      onChange={(event) =>
+                        setIndividualTalisman(event.target.value)
+                      }
+                      placeholder="Descreva o talismã individual deste diabo..."
+                      rows={3}
+                      className={`${inputClass} resize-y`}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* HIERARQUIA E ESTADO */}
             <div className="grid gap-4 sm:grid-cols-2">

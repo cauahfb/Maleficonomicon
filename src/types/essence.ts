@@ -12,7 +12,10 @@ export interface Essence {
   name: string
   titles: string[]
   trueName?: string
+  trueNamePublic: boolean
   nature: EssenceNature
+  hasIndividualTalisman: boolean
+  individualTalisman?: string
   hierarchy: string
   status: EssenceStatus
   imageUrl?: string
