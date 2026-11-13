@@ -1,6 +1,6 @@
-
 import { supabase } from './supabase'
 import type { Contract } from '../types/contract'
+import { getCachedData, invalidateDataCache } from './dataCache'
 
 const STORAGE_KEY = 'maleficonomicon_contracts'
 const MIGRATION_KEY = 'maleficonomicon_contracts_migrated'
@@ -107,19 +107,6 @@ function mapContractToDatabase(
   }
 }
 
-async function isCurrentUserAdmin(): Promise<boolean> {
-  const { data, error } = await supabase.rpc('is_admin')
-
-  if (error) {
-    console.error('Erro ao verificar permissões administrativas:', error)
-    throw new Error('Não foi possível verificar as permissões do usuário.', {
-      cause: error,
-    })
-  }
-
-  return data === true
-}
-
 function getLegacyContracts(): Contract[] {
   try {
     const storedData = localStorage.getItem(STORAGE_KEY)
@@ -196,29 +183,29 @@ async function migrateLegacyContracts(): Promise<void> {
   )
 }
 
-export async function getContracts(): Promise<Contract[]> {
-  const isAdmin = await isCurrentUserAdmin()
+export async function getContracts(isAdmin: boolean): Promise<Contract[]> {
+  const cacheKey = `contracts:${isAdmin ? 'admin' : 'player'}`
 
-  if (isAdmin) {
-    await migrateLegacyContracts()
-  }
+  return getCachedData(cacheKey, async () => {
+    if (isAdmin) {
+      await migrateLegacyContracts()
+    }
 
-  const table = isAdmin ? 'contracts' : 'public_contracts'
+    const table = isAdmin ? 'contracts' : 'public_contracts'
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .order('created_at', { ascending: false })
 
-  const { data, error } = await supabase
-    .from(table)
-    .select('*')
-    .order('created_at', { ascending: false })
+    if (error) {
+      console.error('Erro ao carregar contratos:', error)
+      throw new Error('Não foi possível carregar os contratos.', {
+        cause: error,
+      })
+    }
 
-  if (error) {
-    console.error('Erro ao carregar contratos:', error)
-
-    throw new Error('Não foi possível carregar os contratos.', {
-      cause: error,
-    })
-  }
-
-  return (data as ContractDatabase[]).map(mapDatabaseContract)
+    return (data as ContractDatabase[]).map(mapDatabaseContract)
+  })
 }
 
 export async function saveContract(
@@ -240,7 +227,9 @@ export async function saveContract(
     })
   }
 
-  return mapDatabaseContract(data as ContractDatabase)
+  const savedContract = mapDatabaseContract(data as ContractDatabase)
+  invalidateDataCache('contracts:')
+  return savedContract
 }
 
 export async function toggleContractStatus(
@@ -266,6 +255,7 @@ export async function toggleContractStatus(
     throw new Error('O banco retornou um estado de contrato inválido.')
   }
 
+  invalidateDataCache('contracts:')
   return data
 }
 
@@ -284,4 +274,6 @@ export async function deleteContract(
       cause: error,
     })
   }
+
+  invalidateDataCache('contracts:')
 }

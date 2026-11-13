@@ -1,6 +1,6 @@
-
 import { supabase } from './supabase'
 import type { Essence } from '../types/essence'
+import { getCachedData, invalidateDataCache } from './dataCache'
 
 interface EssenceDatabase {
   id: string
@@ -102,25 +102,13 @@ function mapEssenceToDatabase(essence: Essence) {
   }
 }
 
-async function isCurrentUserAdmin(): Promise<boolean> {
-  const { data, error } = await supabase.rpc('is_admin')
+export async function getEssences(isAdmin: boolean): Promise<Essence[]> {
+  const cacheKey = `essences:${isAdmin ? 'admin' : 'player'}`
 
-  if (error) {
-    console.error('Erro ao verificar permissões administrativas:', error)
-    throw new Error('Não foi possível verificar as permissões do usuário.', {
-      cause: error,
-    })
-  }
-
-  return data === true
-}
-
-export async function getEssences(): Promise<Essence[]> {
-  const isAdmin = await isCurrentUserAdmin()
-
-  if (isAdmin) {
+  return getCachedData(cacheKey, async () => {
+    const table = isAdmin ? 'essences' : 'public_essences'
     const { data, error } = await supabase
-      .from('essences')
+      .from(table)
       .select('*')
       .order('created_at', { ascending: false })
 
@@ -132,21 +120,7 @@ export async function getEssences(): Promise<Essence[]> {
     }
 
     return (data as EssenceDatabase[]).map(mapDatabaseEssence)
-  }
-
-  const { data, error } = await supabase
-    .from('public_essences')
-    .select('*')
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    console.error('Erro ao carregar essências públicas:', error)
-    throw new Error('Não foi possível carregar as essências.', {
-      cause: error,
-    })
-  }
-
-  return (data as EssenceDatabase[]).map(mapDatabaseEssence)
+  })
 }
 
 export async function saveEssences(essences: Essence[]): Promise<void> {
@@ -164,6 +138,8 @@ export async function saveEssences(essences: Essence[]): Promise<void> {
       cause: error,
     })
   }
+
+  invalidateDataCache('essences:')
 }
 
 export async function deleteEssence(id: string): Promise<void> {
@@ -178,4 +154,6 @@ export async function deleteEssence(id: string): Promise<void> {
       cause: error,
     })
   }
+
+  invalidateDataCache('essences:')
 }

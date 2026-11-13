@@ -75,7 +75,11 @@ async function recordAudit(data: AuditLogFormData): Promise<void> {
 // ============================================================
 
 export default function Contracts() {
-  const { isAdmin } = useAuth()
+  const {
+    isAdmin,
+    user,
+    loading: authLoading,
+  } = useAuth()
 
   const [contracts, setContracts] = useState<Contract[]>([])
   const [contractsLoading, setContractsLoading] = useState(true)
@@ -130,13 +134,21 @@ export default function Contracts() {
   // ==========================================================
 
   useEffect(() => {
+    if (authLoading) return
+
     let mounted = true
 
     async function loadData() {
+      setContractsLoading(true)
+      setEssencesLoading(true)
+
+      setContractsError('')
+      setEssencesError('')
+
       try {
         const [contractsData, essencesData] = await Promise.all([
-          getContracts(),
-          getEssences(),
+          getContracts(isAdmin),
+          getEssences(isAdmin),
         ])
 
         if (!mounted) return
@@ -150,8 +162,6 @@ export default function Contracts() {
         )
 
         setEssences(essencesData)
-        setContractsError('')
-        setEssencesError('')
       } catch (error) {
         console.error('Erro ao carregar a biblioteca de contratos:', error)
 
@@ -177,7 +187,7 @@ export default function Contracts() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [isAdmin, user?.id, authLoading])
 
   // ==========================================================
   // DADOS DERIVADOS
@@ -378,10 +388,7 @@ export default function Contracts() {
   // ==========================================================
 
   async function handleToggleStatus(contract: Contract) {
-    if (
-      contractsLoading ||
-      contractsError
-    ) {
+    if (contractsLoading || contractsError) {
       window.alert('Aguarde o carregamento dos dados antes de continuar.')
       return
     }

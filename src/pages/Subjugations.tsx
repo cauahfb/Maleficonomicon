@@ -57,7 +57,11 @@ async function recordAudit(data: AuditLogFormData): Promise<void> {
 // ============================================================
 
 export default function Subjugations() {
-  const { isAdmin } = useAuth()
+  const {
+    isAdmin,
+    user,
+    loading: authLoading,
+  } = useAuth()
 
   const [subjugations, setSubjugations] = useState<Subjugation[]>([])
 
@@ -83,15 +87,19 @@ export default function Subjugations() {
   // ==========================================================
 
   useEffect(() => {
+    if (authLoading) return
+
     let mounted = true
 
     async function loadSubjugations() {
+      setLoading(true)
+      setLoadError('')
+
       try {
-        const data = await getSubjugations()
+        const data = await getSubjugations(isAdmin)
 
         if (mounted) {
           setSubjugations(data)
-          setLoadError('')
         }
       } catch (error) {
         console.error('Erro ao carregar subjugados:', error)
@@ -113,7 +121,7 @@ export default function Subjugations() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [isAdmin, user?.id, authLoading])
 
   // ==========================================================
   // FECHAR MODAL COM ESC
@@ -445,9 +453,9 @@ export default function Subjugations() {
     'Não descoberta',
   ]
 
-  // ============================================================
+  // ==========================================================
   // INTERFACE
-  // ============================================================
+  // ==========================================================
 
   return (
     <div className="space-y-8">

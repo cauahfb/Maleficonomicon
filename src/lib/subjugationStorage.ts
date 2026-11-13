@@ -1,6 +1,6 @@
-
 import { supabase } from './supabase'
 import type { Subjugation } from '../types/subjugation'
+import { getCachedData, invalidateDataCache } from './dataCache'
 
 const STORAGE_KEY = 'maleficonomicon_subjugations'
 
@@ -84,19 +84,6 @@ function mapSubjugationToDatabase(creature: Subjugation) {
   }
 }
 
-async function isCurrentUserAdmin(): Promise<boolean> {
-  const { data, error } = await supabase.rpc('is_admin')
-
-  if (error) {
-    console.error('Erro ao verificar permissões administrativas:', error)
-    throw new Error('Não foi possível verificar as permissões do usuário.', {
-      cause: error,
-    })
-  }
-
-  return data === true
-}
-
 function getLegacySubjugations(): Subjugation[] {
   try {
     const storedData = localStorage.getItem(STORAGE_KEY)
@@ -162,66 +149,62 @@ async function migrateLegacySubjugations(): Promise<void> {
   )
 }
 
-export async function getSubjugations(): Promise<Subjugation[]> {
-  const isAdmin = await isCurrentUserAdmin()
+export async function getSubjugations(isAdmin: boolean): Promise<Subjugation[]> {
+  const cacheKey = `subjugations:${isAdmin ? 'admin' : 'player'}`
 
-  if (isAdmin) {
+  return getCachedData(cacheKey, async () => {
+    if (isAdmin) {
+      const { data, error } = await supabase
+        .from('subjugations')
+        .select('*')
+        .order('created_at', { ascending: true })
+
+      if (error) {
+        console.error('Erro ao carregar subjugados:', error)
+        throw new Error(
+          'Não foi possível carregar os registros de subjugação.',
+          { cause: error },
+        )
+      }
+
+      if ((data ?? []).length === 0) {
+        await migrateLegacySubjugations()
+
+        const { data: migratedData, error: migratedError } = await supabase
+          .from('subjugations')
+          .select('*')
+          .order('created_at', { ascending: true })
+
+        if (migratedError) {
+          throw new Error(
+            'Não foi possível carregar os registros migrados.',
+            { cause: migratedError },
+          )
+        }
+
+        return (migratedData as SubjugationDatabase[]).map(
+          mapDatabaseSubjugation,
+        )
+      }
+
+      return (data as SubjugationDatabase[]).map(mapDatabaseSubjugation)
+    }
+
     const { data, error } = await supabase
-      .from('subjugations')
+      .from('public_subjugations')
       .select('*')
       .order('created_at', { ascending: true })
 
     if (error) {
-      console.error('Erro ao carregar subjugados:', error)
-
+      console.error('Erro ao carregar subjugados públicos:', error)
       throw new Error(
         'Não foi possível carregar os registros de subjugação.',
         { cause: error },
       )
     }
 
-    if ((data ?? []).length === 0) {
-      await migrateLegacySubjugations()
-
-      const { data: migratedData, error: migratedError } = await supabase
-        .from('subjugations')
-        .select('*')
-        .order('created_at', { ascending: true })
-
-      if (migratedError) {
-        throw new Error(
-          'Não foi possível carregar os registros migrados.',
-          { cause: migratedError },
-        )
-      }
-
-      return (migratedData as SubjugationDatabase[]).map(
-        mapDatabaseSubjugation,
-      )
-    }
-
-    return (data as SubjugationDatabase[]).map(
-      mapDatabaseSubjugation,
-    )
-  }
-
-  const { data, error } = await supabase
-    .from('public_subjugations')
-    .select('*')
-    .order('created_at', { ascending: true })
-
-  if (error) {
-    console.error('Erro ao carregar subjugados públicos:', error)
-
-    throw new Error(
-      'Não foi possível carregar os registros de subjugação.',
-      { cause: error },
-    )
-  }
-
-  return (data as SubjugationDatabase[]).map(
-    mapDatabaseSubjugation,
-  )
+    return (data as SubjugationDatabase[]).map(mapDatabaseSubjugation)
+  })
 }
 
 export async function saveSubjugation(
@@ -244,7 +227,9 @@ export async function saveSubjugation(
     )
   }
 
-  return mapDatabaseSubjugation(data as SubjugationDatabase)
+  const savedCreature = mapDatabaseSubjugation(data as SubjugationDatabase)
+  invalidateDataCache('subjugations:')
+  return savedCreature
 }
 
 export async function deleteSubjugation(id: string): Promise<void> {
@@ -261,4 +246,6 @@ export async function deleteSubjugation(id: string): Promise<void> {
       { cause: error },
     )
   }
+
+  invalidateDataCache('subjugations:')
 }

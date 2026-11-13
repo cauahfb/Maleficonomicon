@@ -1,6 +1,5 @@
 
 import { useEffect, useMemo, useState } from 'react'
-import { useAuth } from '../hooks/useAuth'
 import {
   Search,
   Filter,
@@ -17,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
+
+import { useAuth } from '../hooks/useAuth'
 
 import EssenceFormModal from '../components/ui/EssenceFormModal'
 import {
@@ -58,7 +59,7 @@ const natureStyles: Record<EssenceNature, string> = {
 // ============================================================
 
 export default function Essences() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, user, loading: authLoading } = useAuth()
 
   const [essences, setEssences] = useState<Essence[]>([])
   const [loading, setLoading] = useState(true)
@@ -89,9 +90,25 @@ export default function Essences() {
   useEffect(() => {
     let mounted = true
 
+    if (authLoading) {
+      return () => {
+        mounted = false
+      }
+    }
+
     async function loadEssences() {
       try {
-        const data = await getEssences()
+        // A atualização de estado ocorre após a execução assíncrona,
+        // evitando atualização síncrona diretamente no useEffect.
+        await Promise.resolve()
+
+        if (!mounted) return
+
+        setLoading(true)
+        setLoadError('')
+        setEssences([])
+
+        const data = await getEssences(isAdmin)
 
         if (mounted) {
           setEssences(data)
@@ -117,7 +134,7 @@ export default function Essences() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [isAdmin, user?.id, authLoading])
 
   // ==========================================================
   // HISTÓRICO ADMINISTRATIVO
@@ -218,9 +235,6 @@ export default function Essences() {
     Math.ceil(filteredEssences.length / ITEMS_PER_PAGE),
   )
 
-  // Impede que a página atual ultrapasse o total disponível.
-  // Isso também resolve o caso em que uma exclusão reduz
-  // o número de páginas.
   const safeCurrentPage = Math.min(currentPage, totalPages)
 
   const paginatedEssences = useMemo(() => {
@@ -259,7 +273,7 @@ export default function Essences() {
   // ==========================================================
 
   async function handleSave(data: EssenceFormData) {
-    if (!isAdmin || saving || loading || loadError) return
+    if (saving || loading || loadError) return
 
     const savedEssence: Essence = editingEssence
       ? {
@@ -321,7 +335,7 @@ export default function Essences() {
   }
 
   function handleNewEssence() {
-    if (!isAdmin || loading || loadError || saving) return
+    if (loading || loadError || saving) return
 
     setSelectedEssence(null)
     setEditingEssence(null)
@@ -329,7 +343,7 @@ export default function Essences() {
   }
 
   function handleEdit(essence: Essence) {
-    if (!isAdmin || loading || loadError || saving) return
+    if (loading || loadError || saving) return
 
     setSelectedEssence(null)
     setEditingEssence(essence)
@@ -341,13 +355,13 @@ export default function Essences() {
   // ==========================================================
 
   async function handleDelete(essence: Essence) {
-    if (!isAdmin || saving || loading || loadError) return
+    if (saving || loading || loadError) return
 
     setSaving(true)
     setOperationError('')
 
     try {
-      const contracts = await getContracts()
+      const contracts = await getContracts(isAdmin)
 
       const associatedContracts = contracts.filter(
         (contract) => contract.essenceId === essence.id,
@@ -489,16 +503,14 @@ export default function Essences() {
           </p>
         </div>
 
-        {isAdmin && (
-          <button
-            onClick={handleNewEssence}
-            disabled={loading || Boolean(loadError) || saving}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Plus size={18} />
-            Nova Essência
-          </button>
-        )}
+        <button
+          onClick={handleNewEssence}
+          disabled={loading || Boolean(loadError) || saving}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-800 px-4 py-3 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Plus size={18} />
+          Nova Essência
+        </button>
       </div>
 
       {/* CARREGAMENTO E ERROS */}
@@ -802,25 +814,21 @@ export default function Essences() {
                       <Eye size={17} />
                     </button>
 
-                    {isAdmin && (
-                      <>
-                        <button
-                          onClick={() => handleEdit(essence)}
-                          title="Editar"
-                          className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
-                        >
-                          <Pencil size={17} />
-                        </button>
+                    <button
+                      onClick={() => handleEdit(essence)}
+                      title="Editar"
+                      className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
+                    >
+                      <Pencil size={17} />
+                    </button>
 
-                        <button
-                          onClick={() => handleDelete(essence)}
-                          title="Excluir"
-                          className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
-                        >
-                          <Trash2 size={17} />
-                        </button>
-                      </>
-                    )}
+                    <button
+                      onClick={() => handleDelete(essence)}
+                      title="Excluir"
+                      className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
+                    >
+                      <Trash2 size={17} />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -894,25 +902,21 @@ export default function Essences() {
                 <Eye size={17} />
               </button>
 
-              {isAdmin && (
-                <>
-                  <button
-                    onClick={() => handleEdit(essence)}
-                    className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
-                    title="Editar"
-                  >
-                    <Pencil size={17} />
-                  </button>
+              <button
+                onClick={() => handleEdit(essence)}
+                className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
+                title="Editar"
+              >
+                <Pencil size={17} />
+              </button>
 
-                  <button
-                    onClick={() => handleDelete(essence)}
-                    className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
-                    title="Excluir"
-                  >
-                    <Trash2 size={17} />
-                  </button>
-                </>
-              )}
+              <button
+                onClick={() => handleDelete(essence)}
+                className="rounded-lg p-2 text-zinc-500 transition hover:bg-red-950/50 hover:text-red-400"
+                title="Excluir"
+              >
+                <Trash2 size={17} />
+              </button>
             </div>
           </div>
         ))}
@@ -1125,27 +1129,25 @@ export default function Essences() {
                 </div>
               )}
 
-              {isAdmin && (
-                <div className="flex flex-col-reverse justify-between gap-3 border-t border-zinc-800 pt-5 sm:flex-row">
-                  <button
-                    onClick={() => handleDelete(selectedEssence)}
-                    disabled={saving}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-900/50 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Trash2 size={16} />
-                    Excluir registro
-                  </button>
+              <div className="flex flex-col-reverse justify-between gap-3 border-t border-zinc-800 pt-5 sm:flex-row">
+                <button
+                  onClick={() => handleDelete(selectedEssence)}
+                  disabled={saving}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-900/50 px-4 py-2.5 text-sm text-red-400 transition hover:bg-red-950/40 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Trash2 size={16} />
+                  Excluir registro
+                </button>
 
-                  <button
-                    onClick={() => handleEdit(selectedEssence)}
-                    disabled={saving}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Pencil size={16} />
-                    Editar registro
-                  </button>
-                </div>
-              )}
+                <button
+                  onClick={() => handleEdit(selectedEssence)}
+                  disabled={saving}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-4 py-2.5 text-sm text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Pencil size={16} />
+                  Editar registro
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1153,7 +1155,7 @@ export default function Essences() {
 
       {/* MODAL DE CRIAÇÃO E EDIÇÃO */}
 
-      {isAdmin && formOpen && (
+      {formOpen && (
         <EssenceFormModal
           key={editingEssence?.id ?? 'new'}
           initialData={editingEssence ?? undefined}

@@ -12,6 +12,8 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 
+import { useAuth } from '../hooks/useAuth'
+
 import { getEssences } from '../lib/essenceStorage'
 import { getContracts } from '../lib/contractStorage'
 import { getSubjugations } from '../lib/subjugationStorage'
@@ -91,6 +93,8 @@ function getActivityColor(action: AuditLog['action']) {
 }
 
 export default function Dashboard() {
+  const { isAdmin, user, loading: authLoading } = useAuth()
+
   const [stats, setStats] = useState<DashboardStats>(emptyStats)
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsError, setStatsError] = useState('')
@@ -105,6 +109,10 @@ export default function Dashboard() {
   const [levelSaving, setLevelSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  // ==========================================================
+  // CARREGAMENTO DO NÍVEL DE DAHLIA
+  // ==========================================================
+
   useEffect(() => {
     let mounted = true
 
@@ -117,9 +125,10 @@ export default function Dashboard() {
         setSavedLevel(level)
         setLevelInput(level?.toString() ?? '')
       } catch (error) {
-        console.error('Erro ao carregar nível da Dhalia:', error)
+        console.error('Erro ao carregar nível da Dahlia:', error)
+
         if (mounted) {
-          setSaveError('Não foi possível carregar o nível da Dhalia.')
+          setSaveError('Não foi possível carregar o nível da Dahlia.')
         }
       } finally {
         if (mounted) {
@@ -139,16 +148,24 @@ export default function Dashboard() {
   // CARREGAMENTO DOS INDICADORES
   // ==========================================================
 
-
   useEffect(() => {
     let mounted = true
 
+    if (authLoading) {
+      return () => {
+        mounted = false
+      }
+    }
+
     async function loadDashboardData() {
+      setStatsLoading(true)
+      setStatsError('')
+
       try {
         const [essences, contracts, subjugations] = await Promise.all([
-          getEssences(),
-          getContracts(),
-          getSubjugations(),
+          getEssences(isAdmin),
+          getContracts(isAdmin),
+          getSubjugations(isAdmin),
         ])
 
         if (!mounted) return
@@ -197,8 +214,7 @@ export default function Dashboard() {
     return () => {
       mounted = false
     }
-  }, [])
-
+  }, [isAdmin, user?.id, authLoading])
 
   // ==========================================================
   // CARREGAMENTO DAS ATIVIDADES RECENTES
@@ -208,6 +224,9 @@ export default function Dashboard() {
     let mounted = true
 
     async function loadRecentActivities() {
+      setActivitiesLoading(true)
+      setActivitiesError('')
+
       const { data, error } = await supabase
         .from('public_recent_activities')
         .select('id, action, entity_type, entity_name, description, created_at')
@@ -244,7 +263,7 @@ export default function Dashboard() {
       mounted = false
     }
   }, [])
-  
+
   const limits = getContractLimits(savedLevel)
 
   // ==========================================================
@@ -271,7 +290,7 @@ export default function Dashboard() {
       setSavedLevel(level)
       setSaveError('')
     } catch (error) {
-      console.error('Erro ao salvar nível da Dhalia:', error)
+      console.error('Erro ao salvar nível da Dahlia:', error)
       setSaveError('Não foi possível salvar o nível.')
     } finally {
       setLevelSaving(false)
