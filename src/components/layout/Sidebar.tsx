@@ -1,4 +1,5 @@
 
+import { useState } from 'react'
 import {
   BookOpen,
   Skull,
@@ -6,8 +7,11 @@ import {
   Flame,
   Shield,
   X,
+  History,
+  Database,
+  ChevronDown,
 } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 
 interface SidebarProps {
   mobileMenuOpen: boolean
@@ -19,13 +23,27 @@ const navigation = [
   { label: 'Registro de Essências', path: '/essencias', icon: Skull },
   { label: 'Contratos Infernais', path: '/contratos', icon: FileText },
   { label: 'Ritual de Subjugação', path: '/subjugacao', icon: Flame },
-  { label: 'Backup', path: '/backup', icon: Shield },
+]
+
+const adminNavigation = [
+  { label: 'Histórico Administrativo', path: '/historico', icon: History },
+  { label: 'Backup', path: '/backup', icon: Database },
 ]
 
 export default function Sidebar({
   mobileMenuOpen,
   onClose,
 }: SidebarProps) {
+  const location = useLocation()
+
+  const isAdminRoute = adminNavigation.some(
+    (item) => item.path === location.pathname,
+  )
+
+  const [adminExpanded, setAdminExpanded] = useState<boolean | null>(null)
+
+  const isAdminExpanded = adminExpanded ?? isAdminRoute
+
   return (
     <>
       <aside
@@ -56,7 +74,7 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Navegação */}
+        {/* Biblioteca */}
         <div className="px-4 pt-8">
           <p className="mb-4 px-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#71717A]">
             Biblioteca
@@ -99,18 +117,76 @@ export default function Sidebar({
 
         {/* Área administrativa */}
         <div className="mt-auto border-t border-[#27272A] p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#52525B] bg-[#27272A]">
+          <button
+            type="button"
+            onClick={() => setAdminExpanded(!isAdminExpanded)}
+            aria-expanded={isAdminExpanded}
+            className="flex w-full items-center gap-3 text-left"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#52525B] bg-[#27272A]">
               <Shield size={16} className="text-[#D4D4D8]" />
             </div>
 
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm text-[#E4E4E7]">
                 Área administrativa
               </p>
+
               <p className="text-xs text-[#71717A]">
                 Acesso restrito
               </p>
+            </div>
+
+            <ChevronDown
+              size={16}
+              className={`shrink-0 text-[#71717A] transition-transform duration-200 ${
+                isAdminExpanded ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {/* Opções administrativas */}
+          <div
+            className={`grid transition-all duration-300 ${
+              isAdminExpanded
+                ? 'mt-4 grid-rows-[1fr] opacity-100'
+                : 'mt-0 grid-rows-[0fr] opacity-0'
+            }`}
+          >
+            <div className="overflow-hidden">
+              <nav className="space-y-1 border-l border-[#3F3F46] pl-3">
+                {adminNavigation.map((item) => {
+                  const Icon = item.icon
+
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={onClose}
+                      className={({ isActive }) =>
+                        `flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left text-xs transition ${
+                          isActive
+                            ? 'border-[#52525B] bg-[#27272A] text-white'
+                            : 'border-transparent text-[#A1A1AA] hover:bg-[#1F1F23] hover:text-white'
+                        }`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <Icon
+                            size={16}
+                            className={
+                              isActive ? 'text-white' : 'text-[#71717A]'
+                            }
+                          />
+
+                          <span>{item.label}</span>
+                        </>
+                      )}
+                    </NavLink>
+                  )
+                })}
+              </nav>
             </div>
           </div>
         </div>

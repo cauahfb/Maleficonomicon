@@ -13,6 +13,7 @@ import Essences from './pages/Essences'
 import Contracts from './pages/Contracts'
 import Subjugations from './pages/Subjugations'
 import Backup from './pages/Backup'
+import AuditHistory from './pages/AuditHistory'
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
           <Route path="/contratos" element={<Contracts />} />
           <Route path="/subjugacao" element={<Subjugations />} />
           <Route path="/backup" element={<Backup />} />
+          <Route path="/historico" element={<AuditHistory />} />
 
           {/* Redireciona endereços desconhecidos */}
           <Route path="*" element={<Navigate to="/" replace />} />
