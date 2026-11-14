@@ -9,7 +9,7 @@ export default function ProtectedUserRoute() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#09090B]">
         <p className="text-sm text-[#A1A1AA]">
-          Verificando acesso...
+          Contactando os diabos...
         </p>
       </div>
     )
