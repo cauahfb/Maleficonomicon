@@ -49,7 +49,7 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[270px] max-w-[85vw] flex-col overflow-hidden border-r border-[#27272A] bg-[#111113] transition-transform duration-300 lg:static lg:w-[270px] lg:max-w-none lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-[270px] max-w-[85vw] flex-col overflow-hidden border-r border-[#27272A] bg-[#111113] transition-transform duration-300 lg:w-[270px] lg:max-w-none lg:translate-x-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -76,8 +76,10 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Biblioteca pública */}
-        <div className="px-4 pt-8">
+        {/* Navegação com rolagem independente */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {/* Biblioteca pública */}
+          <div className="px-4 pt-8">
           <p className="mb-4 px-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#71717A]">
             Biblioteca
           </p>
@@ -115,6 +117,7 @@ export default function Sidebar({
               )
             })}
           </nav>
+          </div>
         </div>
 
         {/* Área administrativa: somente administradores */}

@@ -8,14 +8,14 @@ export default function MainLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-[#F4F4F5]">
-      <div className="flex min-h-screen">
+    <div className="h-dvh overflow-hidden bg-[#09090B] text-[#F4F4F5]">
+      <div className="flex h-full min-h-0">
         <Sidebar
           mobileMenuOpen={mobileMenuOpen}
           onClose={() => setMobileMenuOpen(false)}
         />
 
-        <main className="min-w-0 flex-1">
+        <main className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain lg:ml-[270px]">
           <Header
             onOpenMenu={() => setMobileMenuOpen(true)}
           />
