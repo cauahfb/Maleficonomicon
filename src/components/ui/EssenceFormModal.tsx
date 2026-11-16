@@ -6,9 +6,9 @@ import type {
   EssenceFormData,
   EssenceNature,
   EssenceStatus,
-  PERSONALITY_OPTIONS,
   EssencePersonality,
 } from '../../types/essence'
+import { PERSONALITY_OPTIONS } from '../../types/essence'
 
 interface EssenceFormModalProps {
   initialData?: Essence

@@ -33,8 +33,8 @@ import type {
   EssenceFormData,
   EssenceNature,
   EssenceStatus,
-  PERSONALITY_OPTIONS,
 } from '../types/essence'
+import { PERSONALITY_OPTIONS } from '../types/essence'
 import type { AuditLogFormData } from '../types/auditLog'
 
 // ============================================================
@@ -677,6 +677,21 @@ export default function Essences() {
               <option value="Contratado">Contratado</option>
               <option value="Subjugado">Subjugado</option>
               <option value="Erradicado">Erradicado</option>
+            </select>
+
+            <select
+              value={personalityFilter}
+              onChange={(event) => {
+                setPersonalityFilter(event.target.value)
+                setCurrentPage(1)
+              }}
+              className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-sm text-zinc-300 outline-none focus:border-red-800"
+            >
+              <option value="Todas">Todas as personalidades</option>
+              <option value="Não definida">Não definida</option>
+              {PERSONALITY_OPTIONS.map((personality) => (
+                <option key={personality} value={personality}>{personality}</option>
+              ))}
             </select>
 
             <select
