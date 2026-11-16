@@ -557,372 +557,301 @@ export default function Backup() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {/* CABEÇALHO */}
 
       <div>
-        <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.25em] text-amber-500">
-          <Database size={14} />
-          Proteção dos registros
-        </div>
-
-        <h1 className="text-3xl font-semibold tracking-tight text-white">
-          Central de Backup
+        <h1 className="font-serif text-3xl text-white md:text-4xl">
+          Backup e snapshots
         </h1>
 
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500">
-          Preserve os registros do Maleficonomicon e mantenha
-          uma cópia de segurança dos dados da campanha.
+        <p className="mt-2 text-sm text-[#A1A1AA]">
+          Exporte, restaure e preserve versões da progressão do Maleficonomicon.
         </p>
       </div>
 
-      {/* EXPORTAÇÃO */}
+      {/* AÇÕES PRINCIPAIS */}
 
-      <section className="rounded-xl border border-[#3F3F46] bg-[#111113] p-6 md:p-8">
-        <div className="flex items-start gap-4">
-          <div className="rounded-lg border border-amber-900/40 bg-amber-950/30 p-3">
-            <FileJson className="text-amber-500" size={25} />
+      <section className="grid gap-4 lg:grid-cols-2">
+        {/* GERAR BACKUP */}
+
+        <div className="flex flex-col rounded-lg border border-[#3F3F46] bg-[#111113] p-5">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-amber-900/50 bg-amber-950/20">
+            <Download size={19} className="text-amber-500" />
           </div>
 
-          <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-semibold text-white">
-              Criar cópia de segurança
-            </h2>
+          <h2 className="font-serif text-xl text-white">
+            Gerar backup
+          </h2>
 
-            <p className="mt-1 text-sm leading-relaxed text-zinc-500">
-              Exporte todos os registros armazenados no banco
-              de dados em um único arquivo JSON.
-            </p>
-          </div>
-        </div>
+          <p className="mt-2 text-xs leading-5 text-[#A1A1AA]">
+            Baixe um JSON com essências, contratos, subjugações,
+            configurações e registros de auditoria.
+          </p>
 
-        <div className="my-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            {
-              label: 'Essências',
-              description: 'Criaturas e entidades registradas',
-            },
-            {
-              label: 'Contratos',
-              description: 'Acordos e cláusulas infernais',
-            },
-            {
-              label: 'Subjugações',
-              description: 'Criaturas descobertas e subjugadas',
-            },
-            {
-              label: 'Configuração',
-              description: 'Nível atual de Dahlia',
-            },
-            {
-              label: 'Auditoria',
-              description: 'Histórico completo de atividades',
-            },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="rounded-lg border border-[#27272A] bg-[#09090B] p-4"
-            >
-              <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-                <CheckCircle2 size={15} className="text-emerald-500" />
-                {item.label}
-              </div>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="mt-4 flex w-full items-center justify-center gap-2 self-start rounded-md border border-amber-700/60 bg-amber-800 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            {exporting ? (
+              <>
+                <Loader2 size={17} className="animate-spin" />
+                Gerando backup...
+              </>
+            ) : (
+              <>
+                <Download size={17} />
+                Gerar backup JSON
+              </>
+            )}
+          </button>
 
-              <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-                {item.description}
+          {lastBackup && (
+            <div className="mt-4 rounded-md border border-[#3F3F46] bg-[#09090B] p-3">
+              <p className="text-xs font-medium text-[#E4E4E7]">
+                Último backup gerado nesta sessão
               </p>
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded-lg border border-[#3F3F46] bg-[#09090B] p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle
-              size={18}
-              className="mt-0.5 shrink-0 text-amber-500"
-            />
-
-            <p className="text-xs leading-relaxed text-zinc-400">
-              O arquivo contém informações privadas da campanha,
-              incluindo nomes verdadeiros, cláusulas e registros
-              administrativos. Guarde-o em um local seguro e não
-              o compartilhe publicamente.
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={exporting}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-amber-700 px-5 py-3 text-sm font-medium text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-        >
-          {exporting ? (
-            <>
-              <Loader2 size={18} className="animate-spin" />
-              Gerando backup...
-            </>
-          ) : (
-            <>
-              <Download size={18} />
-              Gerar e baixar backup
-            </>
-          )}
-        </button>
-
-        {error && (
-          <div className="mt-4 rounded-lg border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div className="mt-4 rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-4 text-sm text-emerald-400">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 size={17} />
-              {success}
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* ÚLTIMO BACKUP */}
-
-      {lastBackup && (
-        <section className="rounded-xl border border-[#3F3F46] bg-[#111113] p-6">
-          <div className="flex items-center gap-3">
-            <Clock size={20} className="text-zinc-400" />
-
-            <h2 className="font-semibold text-white">
-              Último backup gerado nesta sessão
-            </h2>
-          </div>
-
-          <p className="mt-3 text-sm text-zinc-400">
-            {formatDate(lastBackup.date)}
-          </p>
-
-          <p className="mt-1 text-xs text-zinc-500">
-            Tamanho do arquivo: {formatBytes(lastBackup.size)}
-          </p>
-
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {Object.entries(lastBackup.counts).map(([label, count]) => (
-              <div
-                key={label}
-                className="rounded-lg border border-[#27272A] bg-[#09090B] p-3"
-              >
-                <p className="text-2xl font-semibold text-white">
-                  {count}
-                </p>
-
-                <p className="mt-1 text-xs text-zinc-500">
-                  {label}
-                </p>
+              <p className="mt-1 text-[11px] text-[#A1A1AA]">
+                {formatDate(lastBackup.date)} · {formatBytes(lastBackup.size)}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                {Object.entries(lastBackup.counts).map(([label, count]) => (
+                  <span key={label} className="text-[10px] text-[#71717A]">
+                    {label}: {count}
+                  </span>
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+        </div>
+
+        {/* RESTAURAR BACKUP */}
+
+        <div className="flex flex-col rounded-lg border border-[#3F3F46] bg-[#111113] p-5">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-amber-900/50 bg-amber-950/20">
+            <Upload size={19} className="text-amber-500" />
           </div>
-        </section>
-      )}
 
-      {/* RESTAURAÇÃO DE ARQUIVO */}
-
-      <section className="rounded-xl border border-[#3F3F46] bg-[#111113] p-6 md:p-8">
-        <div className="flex items-center gap-3">
-          <Upload size={21} className="text-zinc-400" />
-
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="font-serif text-xl text-white">
             Restaurar backup
           </h2>
-        </div>
 
-        <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-          Recupere os registros a partir de um arquivo JSON
-          previamente exportado pelo Maleficonomicon.
-        </p>
+          <p className="mt-2 text-xs leading-5 text-[#A1A1AA]">
+            Importe um JSON gerado pelo Maleficonomicon. Antes da restauração,
+            você poderá revisar os dados e confirmar a operação.
+          </p>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json,application/json"
-          onChange={handleFileSelection}
-          className="hidden"
-        />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleFileSelection}
+            className="hidden"
+          />
 
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={restoring}
-          className="mt-5 flex items-center gap-2 rounded-lg border border-[#3F3F46] bg-[#09090B] px-4 py-3 text-sm text-zinc-200 transition hover:border-zinc-500 hover:bg-[#18181B] disabled:opacity-50"
-        >
-          <FileJson size={18} />
-          Selecionar arquivo JSON
-        </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={restoring}
+            className="mt-4 flex items-center justify-center gap-2 self-start rounded-md border border-[#52525B] bg-[#18181B] px-4 py-2.5 text-sm text-[#E4E4E7] transition hover:border-amber-700/60 hover:bg-[#27272A] disabled:opacity-50"
+          >
+            <FileJson size={17} />
+            Selecionar arquivo JSON
+          </button>
 
-        {selectedFile && (
-          <div className="mt-5 rounded-lg border border-[#3F3F46] bg-[#09090B] p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-emerald-400">
-              <CheckCircle2 size={17} />
-              Arquivo validado
-            </div>
+          {selectedFile && (
+            <div className="mt-4 rounded-md border border-[#3F3F46] bg-[#09090B] p-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">
+                <CheckCircle2 size={15} />
+                Arquivo validado
+              </div>
 
-            <p className="mt-2 break-all text-sm text-zinc-300">
-              {selectedFileName}
-            </p>
+              <p className="mt-2 break-all text-xs text-[#E4E4E7]">
+                {selectedFileName}
+              </p>
 
-            <p className="mt-1 text-xs text-zinc-500">
-              Exportado em: {formatDate(selectedFile.exportedAt)}
-            </p>
+              <p className="mt-1 text-[11px] text-[#71717A]">
+                Exportado em: {formatDate(selectedFile.exportedAt)}
+              </p>
 
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {TABLES.map((table) => (
-                <div
-                  key={table}
-                  className="rounded-lg border border-[#27272A] bg-[#111113] p-3"
-                >
-                  <p className="text-2xl font-semibold text-white">
-                    {selectedFile.data[table].length}
-                  </p>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {TABLES.map((table) => (
+                  <div
+                    key={table}
+                    className="rounded border border-[#27272A] bg-[#111113] p-2"
+                  >
+                    <p className="text-base font-semibold text-white">
+                      {selectedFile.data[table].length}
+                    </p>
+                    <p className="text-[10px] text-[#A1A1AA]">
+                      {TABLE_LABELS[table]}
+                    </p>
+                  </div>
+                ))}
+              </div>
 
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {TABLE_LABELS[table]}
+              <div className="mt-3 rounded-md border border-red-900/40 bg-red-950/20 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-400" />
+                  <p className="text-[11px] leading-5 text-red-300">
+                    A restauração substituirá os dados atuais. O estado atual
+                    será preservado automaticamente em um snapshot antes da
+                    substituição.
                   </p>
                 </div>
-              ))}
-            </div>
-
-            <div className="mt-5 rounded-lg border border-red-900/40 bg-red-950/20 p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle
-                  size={18}
-                  className="mt-0.5 shrink-0 text-red-400"
-                />
-
-                <p className="text-xs leading-relaxed text-red-300">
-                  A restauração substituirá os dados atuais pelas
-                  informações contidas neste arquivo. O estado atual
-                  será preservado automaticamente no histórico de
-                  snapshots antes da substituição.
-                </p>
               </div>
+
+              <label className="mt-3 block text-xs font-medium text-[#A1A1AA]">
+                Digite RESTAURAR para confirmar
+              </label>
+
+              <input
+                type="text"
+                value={restoreConfirmation}
+                onChange={(event) => setRestoreConfirmation(event.target.value)}
+                placeholder="RESTAURAR"
+                disabled={restoring}
+                className="mt-2 w-full rounded-md border border-[#3F3F46] bg-[#09090B] px-3 py-2 text-sm text-white outline-none transition placeholder:text-[#52525B] focus:border-amber-600"
+              />
+
+              <button
+                type="button"
+                onClick={handleRestore}
+                disabled={restoring || restoreConfirmation !== 'RESTAURAR'}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-red-900/80 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+              >
+                {restoring ? (
+                  <>
+                    <Loader2 size={17} className="animate-spin" />
+                    Restaurando dados...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw size={17} />
+                    Restaurar backup
+                  </>
+                )}
+              </button>
             </div>
-
-            <label className="mt-5 block text-xs font-medium text-zinc-400">
-              Digite RESTAURAR para confirmar
-            </label>
-
-            <input
-              type="text"
-              value={restoreConfirmation}
-              onChange={(event) => setRestoreConfirmation(event.target.value)}
-              placeholder="RESTAURAR"
-              disabled={restoring}
-              className="mt-2 w-full rounded-lg border border-[#3F3F46] bg-[#09090B] px-3 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-amber-600"
-            />
-
-            <button
-              type="button"
-              onClick={handleRestore}
-              disabled={restoring || restoreConfirmation !== 'RESTAURAR'}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-red-900/80 px-5 py-3 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-            >
-              {restoring ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  Restaurando dados...
-                </>
-              ) : (
-                <>
-                  <RotateCcw size={18} />
-                  Restaurar dados
-                </>
-              )}
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </section>
 
-      {/* HISTÓRICO DE SNAPSHOTS */}
+      {/* MENSAGENS DE ESTADO */}
 
-      <section className="rounded-xl border border-[#3F3F46] bg-[#111113] p-6 md:p-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <History size={21} className="text-amber-500" />
-
-            <div>
-              <h2 className="text-lg font-semibold text-white">
-                Histórico de snapshots
-              </h2>
-
-              <p className="mt-1 text-xs text-zinc-500">
-                Cópias automáticas preservadas antes de cada restauração.
-              </p>
-            </div>
+      {(error || success) && (
+        <div
+          className={`rounded-md border p-3 text-xs ${
+            error
+              ? 'border-red-900/50 bg-red-950/20 text-red-400'
+              : 'border-emerald-900/50 bg-emerald-950/20 text-emerald-400'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {error ? (
+              <AlertTriangle size={15} />
+            ) : (
+              <CheckCircle2 size={15} />
+            )}
+            {error || success}
           </div>
+        </div>
+      )}
+
+      {/* SNAPSHOTS */}
+
+      <section className="rounded-lg border border-[#3F3F46] bg-[#111113] p-5 md:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.25em] text-amber-500">
+              <span className="h-px w-5 bg-amber-600" />
+              Versões da progressão
+            </div>
+
+            <h2 className="font-serif text-xl text-white">
+              Snapshots
+            </h2>
+
+            <p className="mt-1 text-xs text-[#A1A1AA]">
+              Preserve versões para poder retornar a um estado anterior.
+            </p>
+          </div>
+
+          <div className="rounded-md border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs font-medium text-amber-500">
+            {snapshots.length} / 5
+          </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-[#71717A]">
+            Os snapshots são criados automaticamente antes de cada restauração.
+          </p>
 
           <button
             type="button"
             onClick={() => void loadSnapshots()}
             disabled={loadingSnapshots}
-            className="flex items-center gap-2 rounded-lg border border-[#3F3F46] px-3 py-2 text-xs text-zinc-300 transition hover:bg-[#27272A] disabled:opacity-50"
+            className="flex items-center gap-2 rounded-md border border-[#52525B] px-3 py-2 text-xs text-[#D4D4D8] transition hover:bg-[#27272A] disabled:opacity-50"
           >
             {loadingSnapshots ? (
-              <Loader2 size={15} className="animate-spin" />
+              <Loader2 size={14} className="animate-spin" />
             ) : (
-              <RefreshCw size={15} />
+              <RefreshCw size={14} />
             )}
             Atualizar
           </button>
         </div>
 
         {snapshotError && (
-          <div className="mt-4 rounded-lg border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-400">
+          <div className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 p-3 text-xs text-red-400">
             {snapshotError}
           </div>
         )}
 
         {loadingSnapshots && snapshots.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-zinc-500">
-            <Loader2 size={18} className="animate-spin" />
-            Carregando histórico...
+          <div className="flex min-h-24 items-center justify-center gap-2 text-xs text-[#A1A1AA]">
+            <Loader2 size={17} className="animate-spin" />
+            Carregando snapshots...
           </div>
         ) : snapshots.length === 0 ? (
-          <div className="mt-5 rounded-lg border border-[#27272A] bg-[#09090B] p-6 text-center">
-            <History size={26} className="mx-auto text-zinc-600" />
-
-            <p className="mt-3 text-sm text-zinc-400">
-              Nenhum snapshot foi registrado ainda.
+          <div className="rounded-md border border-[#27272A] bg-[#09090B] p-6 text-center">
+            <History size={24} className="mx-auto text-[#71717A]" />
+            <p className="mt-3 text-sm text-[#D4D4D8]">
+              Nenhum snapshot registrado.
             </p>
-
-            <p className="mt-1 text-xs text-zinc-600">
+            <p className="mt-1 text-xs text-[#71717A]">
               Um snapshot será criado automaticamente antes da primeira restauração.
             </p>
           </div>
         ) : (
-          <div className="mt-5 space-y-3">
-            {snapshots.map((snapshot) => {
+          <div className="overflow-hidden rounded-md border border-[#3F3F46]">
+            {snapshots.map((snapshot, index) => {
               const isSelected = selectedSnapshot === snapshot.id
               const isRestoring = restoringSnapshot === snapshot.id
 
               return (
                 <div
                   key={snapshot.id}
-                  className="rounded-lg border border-[#27272A] bg-[#09090B] p-4"
+                  className={`bg-[#09090B] p-3 ${
+                    index < snapshots.length - 1 ? 'border-b border-[#3F3F46]' : ''
+                  }`}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-                        <Clock size={15} className="text-amber-500" />
-                        {formatDate(snapshot.created_at)}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-amber-900/40 bg-amber-950/20">
+                        <Clock size={17} className="text-amber-500" />
                       </div>
 
-                      <p className="mt-2 break-all text-xs text-zinc-500">
-                        ID: {snapshot.id}
-                      </p>
-
-                      <p className="mt-1 break-all text-xs text-zinc-600">
-                        Administrador: {snapshot.created_by}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-[#E4E4E7]">
+                          Snapshot da progressão
+                        </p>
+                        <p className="mt-1 text-[10px] text-[#A1A1AA]">
+                          {formatDate(snapshot.created_at)}
+                        </p>
+                      </div>
                     </div>
 
                     <button
@@ -933,55 +862,50 @@ export default function Backup() {
                         setSnapshotError('')
                       }}
                       disabled={Boolean(restoringSnapshot)}
-                      className="flex items-center gap-2 rounded-lg border border-amber-900/50 px-3 py-2 text-xs font-medium text-amber-500 transition hover:bg-amber-950/30 disabled:opacity-50"
+                      className="flex shrink-0 items-center gap-2 rounded-md border border-[#52525B] px-3 py-2 text-xs text-[#D4D4D8] transition hover:border-amber-700/60 hover:bg-[#18181B] disabled:opacity-50"
                     >
-                      <RotateCcw size={15} />
-                      {isSelected ? 'Cancelar' : 'Recuperar snapshot'}
+                      <RotateCcw size={14} />
+                      {isSelected ? 'Cancelar' : 'Restaurar'}
                     </button>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-                    {(
-                      [
-                        ['Essências', snapshot.counts.essences],
-                        ['Contratos', snapshot.counts.contracts],
-                        ['Subjugações', snapshot.counts.subjugations],
-                        ['Configuração', snapshot.counts.dahlia_config],
-                        ['Auditoria', snapshot.counts.audit_logs],
-                      ] as [string, number][]
-                    ).map(([label, count]) => (
-                      <div
-                        key={label}
-                        className="rounded-md border border-[#27272A] bg-[#111113] p-3"
-                      >
-                        <p className="text-lg font-semibold text-white">
-                          {count}
-                        </p>
-
-                        <p className="text-xs text-zinc-500">
-                          {label}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
                   {isSelected && (
-                    <div className="mt-4 rounded-lg border border-red-900/40 bg-red-950/10 p-4">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle
-                          size={18}
-                          className="mt-0.5 shrink-0 text-red-400"
-                        />
+                    <div className="mt-3 rounded-md border border-red-900/40 bg-red-950/10 p-3">
+                      <p className="text-[11px] leading-5 text-red-300">
+                        A recuperação substituirá os dados atuais pelos dados
+                        deste snapshot. O estado atual também será preservado
+                        em um novo snapshot antes da recuperação.
+                      </p>
 
-                        <p className="text-xs leading-relaxed text-red-300">
-                          A recuperação substituirá os dados atuais
-                          pelos dados deste snapshot. O estado atual
-                          também será preservado em um novo snapshot
-                          antes da recuperação.
-                        </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                        {(
+                          [
+                            ['Essências', snapshot.counts.essences],
+                            ['Contratos', snapshot.counts.contracts],
+                            ['Subjugações', snapshot.counts.subjugations],
+                            ['Configuração', snapshot.counts.dahlia_config],
+                            ['Auditoria', snapshot.counts.audit_logs],
+                          ] as [string, number][]
+                        ).map(([label, count]) => (
+                          <div
+                            key={label}
+                            className="rounded border border-[#3F3F46] bg-[#111113] p-2"
+                          >
+                            <p className="text-base font-semibold text-white">
+                              {count}
+                            </p>
+                            <p className="text-[10px] text-[#A1A1AA]">
+                              {label}
+                            </p>
+                          </div>
+                        ))}
                       </div>
 
-                      <label className="mt-4 block text-xs font-medium text-zinc-400">
+                      <p className="mt-3 break-all text-[10px] text-[#71717A]">
+                        ID: {snapshot.id} · Administrador: {snapshot.created_by}
+                      </p>
+
+                      <label className="mt-3 block text-xs font-medium text-[#A1A1AA]">
                         Digite RECUPERAR para confirmar
                       </label>
 
@@ -993,7 +917,7 @@ export default function Backup() {
                         }
                         placeholder="RECUPERAR"
                         disabled={isRestoring}
-                        className="mt-2 w-full rounded-lg border border-[#3F3F46] bg-[#09090B] px-3 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-red-700"
+                        className="mt-2 w-full rounded-md border border-[#3F3F46] bg-[#09090B] px-3 py-2 text-sm text-white outline-none transition placeholder:text-[#52525B] focus:border-red-700"
                       />
 
                       <button
@@ -1003,16 +927,16 @@ export default function Backup() {
                           isRestoring ||
                           snapshotConfirmation !== 'RECUPERAR'
                         }
-                        className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-red-900/80 px-5 py-3 text-sm font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-red-900/80 px-4 py-2.5 text-xs font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
                       >
                         {isRestoring ? (
                           <>
-                            <Loader2 size={18} className="animate-spin" />
+                            <Loader2 size={16} className="animate-spin" />
                             Recuperando snapshot...
                           </>
                         ) : (
                           <>
-                            <RotateCcw size={18} />
+                            <RotateCcw size={15} />
                             Confirmar recuperação
                           </>
                         )}
@@ -1024,6 +948,14 @@ export default function Backup() {
             })}
           </div>
         )}
+
+        <div className="mt-4 flex items-start gap-2 rounded-md border border-[#3F3F46] bg-[#09090B] p-3">
+          <ShieldCheck size={15} className="mt-0.5 shrink-0 text-amber-500" />
+          <p className="text-[10px] leading-5 text-[#A1A1AA]">
+            A criação de um sexto snapshot remove automaticamente o mais antigo.
+            Restaurar um snapshot não o remove da lista.
+          </p>
+        </div>
       </section>
     </div>
   )
