@@ -227,12 +227,12 @@ export default function Dashboard() {
       setActivitiesLoading(true)
       setActivitiesError('')
 
-      const { data, error } = await supabase
+      const [{ data, error }, subjugations] = await Promise.all([supabase
         .from('public_recent_activities')
         .select('id, action, entity_type, entity_name, description, created_at')
         .neq('action', 'Editado')
         .order('created_at', { ascending: false })
-        .limit(2)
+        .limit(30), getSubjugations(false)])
 
       if (!mounted) return
 
@@ -240,7 +240,8 @@ export default function Dashboard() {
         console.error('Erro ao carregar atividades recentes:', error)
         setActivitiesError('Não foi possível carregar as atividades recentes.')
       } else {
-        const activities: AuditLog[] = (data ?? []).map((log) => ({
+        const undiscoveredNames = new Set(subjugations.filter((creature) => creature.discoveryStatus === 'Não descoberta').map((creature) => creature.name))
+        const activities: AuditLog[] = (data ?? []).filter((log) => log.entity_type !== 'Subjugação' || !undiscoveredNames.has(log.entity_name)).slice(0, 2).map((log) => ({
           id: log.id,
           action: log.action as AuditLog['action'],
           entityType: log.entity_type as AuditLog['entityType'],

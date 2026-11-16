@@ -33,6 +33,7 @@ import type {
   EssenceFormData,
   EssenceNature,
   EssenceStatus,
+  PERSONALITY_OPTIONS,
 } from '../types/essence'
 import type { AuditLogFormData } from '../types/auditLog'
 
@@ -70,6 +71,7 @@ export default function Essences() {
   const [search, setSearch] = useState('')
   const [natureFilter, setNatureFilter] = useState('Todas')
   const [statusFilter, setStatusFilter] = useState('Todos')
+  const [personalityFilter, setPersonalityFilter] = useState('Todas')
   const [trueNameFilter, setTrueNameFilter] = useState('Todos')
   const [sortOrder, setSortOrder] = useState('newest')
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -167,6 +169,7 @@ export default function Essences() {
           essence.trueName ?? '',
           essence.individualTalisman ?? '',
           essence.hierarchy,
+          essence.personality ?? '',
           essence.description,
           ...essence.titles,
         ]
@@ -186,6 +189,14 @@ export default function Essences() {
     if (statusFilter !== 'Todos') {
       result = result.filter(
         (essence) => essence.status === statusFilter,
+      )
+    }
+
+    if (personalityFilter !== 'Todas') {
+      result = result.filter((essence) =>
+        personalityFilter === 'Não definida'
+          ? !essence.personality
+          : essence.personality === personalityFilter,
       )
     }
 
@@ -222,6 +233,7 @@ export default function Essences() {
     search,
     natureFilter,
     statusFilter,
+    personalityFilter,
     trueNameFilter,
     sortOrder,
   ])
@@ -735,6 +747,10 @@ export default function Essences() {
               </th>
 
               <th className="px-5 py-4 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                Personalidade
+              </th>
+
+              <th className="px-5 py-4 text-xs font-medium uppercase tracking-wider text-zinc-500">
                 Hierarquia
               </th>
 
@@ -781,6 +797,10 @@ export default function Essences() {
                   >
                     {essence.nature}
                   </span>
+                </td>
+
+                <td className="px-5 py-4 text-sm text-zinc-400">
+                  {essence.personality || 'Não definida'}
                 </td>
 
                 <td className="px-5 py-4 text-sm text-zinc-400">

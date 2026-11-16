@@ -6,6 +6,8 @@ import type {
   EssenceFormData,
   EssenceNature,
   EssenceStatus,
+  PERSONALITY_OPTIONS,
+  EssencePersonality,
 } from '../../types/essence'
 
 interface EssenceFormModalProps {
@@ -39,6 +41,8 @@ export default function EssenceFormModal({
   const [individualTalisman, setIndividualTalisman] = useState(
     initialData?.individualTalisman ?? '',
   )
+
+  const [personality, setPersonality] = useState<EssencePersonality | ''>(initialData?.personality ?? '')
 
   const [nature, setNature] = useState<EssenceNature>(
     initialData?.nature ?? 'Demônio',
@@ -96,6 +100,7 @@ export default function EssenceFormModal({
       trueNamePublic: trueNamePublic,
 
       nature,
+      personality,
 
       hasIndividualTalisman:
         nature === 'Diabo' && hasIndividualTalisman,
@@ -272,6 +277,21 @@ export default function EssenceFormModal({
                   Diabo
                 </button>
               </div>
+            </div>
+
+            {/* PERSONALIDADE */}
+            <div>
+              <label className={labelClass}>Personalidade</label>
+              <select
+                value={personality}
+                onChange={(event) => setPersonality(event.target.value as EssencePersonality | '')}
+                className={inputClass}
+              >
+                <option value="">Não definida</option>
+                {PERSONALITY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </div>
 
             {/* TALISMÃ INDIVIDUAL DOS DIABOS */}

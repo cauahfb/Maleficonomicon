@@ -9,6 +9,7 @@ interface EssenceDatabase {
   true_name: string | null
   true_name_public: boolean
   nature: Essence['nature']
+  personality?: Essence['personality'] | null
   has_individual_talisman: boolean
   individual_talisman: string | null
   hierarchy: string
@@ -32,6 +33,7 @@ function normalizeEssence(data: Partial<Essence>): Essence {
     trueName: data.trueName || undefined,
     trueNamePublic: data.trueNamePublic === true,
     nature,
+    personality: data.personality ?? '',
     hasIndividualTalisman,
     individualTalisman: hasIndividualTalisman
       ? data.individualTalisman || undefined
@@ -53,6 +55,7 @@ function mapDatabaseEssence(row: EssenceDatabase): Essence {
     trueName: row.true_name ?? undefined,
     trueNamePublic: row.true_name_public,
     nature: row.nature,
+    personality: row.personality ?? '',
     hasIndividualTalisman: row.has_individual_talisman,
     individualTalisman: row.individual_talisman ?? undefined,
     hierarchy: row.hierarchy,
@@ -91,6 +94,7 @@ function mapEssenceToDatabase(essence: Essence) {
     true_name: normalized.trueName ?? null,
     true_name_public: normalized.trueNamePublic,
     nature: normalized.nature,
+    personality: normalized.personality || null,
     has_individual_talisman: normalized.hasIndividualTalisman,
     individual_talisman: normalized.individualTalisman ?? null,
     hierarchy: normalized.hierarchy,
