@@ -1,6 +1,8 @@
 # ☠ MALEFICONOMICON
 ### O Grimório das Essências Proibidas
-Parte do Projeto campanharpg.com.br
+Parte do Projeto CampanhaRPG
+[![Website](https://img.shields.io/badge/Website-campanharpg.com.br-67247f?style=for-the-badge)](https://campanharpg.com.br)
+
 > *"Toda essência possui um nome. Todo nome carrega um poder. Todo poder exige um preço."*
 
 ---
